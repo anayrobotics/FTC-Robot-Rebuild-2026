@@ -21,7 +21,9 @@ apply plugin: 'com.android.application'
 
 android {
 
-    compileSdkVersion 30
+    // Bumped 30 -> 34: PedroPathing/Panels pull in androidx artifacts that
+    // require compileSdk 34. minSdk/targetSdk are unchanged.
+    compileSdkVersion 34
 
     signingConfigs {
         release {
