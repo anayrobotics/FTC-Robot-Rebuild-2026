@@ -13,9 +13,14 @@ import org.firstinspires.ftc.teamcode.subsystems.Drivebase;
 import org.firstinspires.ftc.teamcode.subsystems.Flywheel;
 import org.firstinspires.ftc.teamcode.subsystems.Indexer;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
+import org.firstinspires.ftc.teamcode.subsystems.Limelight;
+import org.firstinspires.ftc.teamcode.subsystems.Turret;
 
 @TeleOp(name = "Mecanum TeleOp 67", group = "Drive")
 public class MecanumTeleOp extends OpMode {
+    // Trigger past this counts as "held".
+    private static final double TRIGGER_THRESHOLD = 0.5;
+
     private final Hardware hardware = new Hardware();
     private final CommandScheduler scheduler = CommandScheduler.getInstance();
 
@@ -23,8 +28,12 @@ public class MecanumTeleOp extends OpMode {
     private Intake intake;
     private Indexer indexer;
     private Flywheel flywheel;
+    private Limelight limelight;
+    private Turret turret;
 
     private boolean fieldCentric = true;
+    // Tracks the fire trigger so we can stop feeding exactly when it's released.
+    private boolean firePrev = false;
 
     @Override
     public void init(){
@@ -33,11 +42,16 @@ public class MecanumTeleOp extends OpMode {
         intake = new Intake(hardware);
         indexer = new Indexer(hardware);
         flywheel = new Flywheel(hardware);
+        limelight = new Limelight(hardware);
+        turret = new Turret(hardware, limelight);
 
         scheduler.reset();
-        scheduler.registerSubsystem(intake, indexer, flywheel);
+        // Order matters: the Limelight must refresh BEFORE the Turret reads it,
+        // so the turret aims on this loop's fresh vision data.
+        scheduler.registerSubsystem(intake, indexer, flywheel, limelight, turret);
 
         telemetry.addLine("Initialized.");
+        telemetry.addData("Aiming at", targetName());
         telemetry.update();
     }
 
@@ -48,6 +62,15 @@ public class MecanumTeleOp extends OpMode {
             drivebase.resetHeading();
         }
         drivebase.driveWithGamepad(gamepad1, fieldCentric);
+
+        // Alliance goal selection (gamepad1). Pick which AprilTag the turret
+        // hunts for — do this once at the start of the match for your alliance.
+        if (gamepad1.dpadLeftWasPressed()) {
+            limelight.setTargetTagId(Constants.Vision.BLUE_GOAL_TAG);
+        }
+        if (gamepad1.dpadRightWasPressed()) {
+            limelight.setTargetTagId(Constants.Vision.RED_GOAL_TAG);
+        }
 
         // Intake (gamepad2). rising-edge presses schedule state changes.
         if (gamepad2.rightBumperWasPressed()) {
@@ -60,7 +83,8 @@ public class MecanumTeleOp extends OpMode {
             scheduler.schedule(new SetIntakeStateCommand(intake, Intake.State.IDLE));
         }
 
-        // Indexer (gamepad2).
+        // Indexer manual control (gamepad2). Auto-fire below can override this
+        // while the fire trigger is held.
         if (gamepad2.dpadUpWasPressed()) {
             scheduler.schedule(new SetIndexerStateCommand(indexer, Indexer.State.FEEDING));
         }
@@ -71,13 +95,50 @@ public class MecanumTeleOp extends OpMode {
             scheduler.schedule(new SetIndexerStateCommand(indexer, Indexer.State.IDLE));
         }
 
-        // Flywheel (gamepad2). X spins up to shooting RPM, Y stops it.
+        // Flywheel manual presets (gamepad2). X spins up, Y stops. Auto-aim
+        // (below) overrides the target RPM while it's active.
         if (gamepad2.xWasPressed()) {
             scheduler.schedule(new SetFlywheelRpmCommand(flywheel, Constants.Flywheel.SHOOT_RPM));
         }
         if (gamepad2.yWasPressed()) {
             scheduler.schedule(new SetFlywheelRpmCommand(flywheel, 0));
         }
+
+        // --- Turret + shooter integration (gamepad2) ---
+        // Hold right trigger: turret auto-aims at the goal AND the flywheel
+        // auto-ranges to the measured distance. These run in parallel via the
+        // Limelight and Turret subsystem periodics.
+        boolean autoAim = gamepad2.right_trigger > TRIGGER_THRESHOLD;
+        if (autoAim) {
+            turret.setState(Turret.State.AUTO_AIM);
+
+            double distance = limelight.getDistanceMeters();
+            double rpm = distance > 0
+                    ? Flywheel.rpmForDistance(distance)
+                    : Constants.Flywheel.SHOOT_RPM;   // no range read yet — use preset
+            flywheel.setTargetRpm(rpm);
+        } else {
+            // Not aiming: let the operator nudge the turret with the right stick.
+            double manual = gamepad2.right_stick_x;
+            if (Math.abs(manual) > Constants.Drive.DEADZONE) {
+                turret.setState(Turret.State.MANUAL);
+                turret.setManualPower(manual);
+            } else {
+                turret.setState(Turret.State.IDLE);
+            }
+        }
+
+        // Hold left trigger to FIRE — but the indexer only feeds when we're
+        // actually locked on AND up to speed, so we never launch a shot that
+        // would miss. Releasing the trigger stops the feed.
+        boolean fire = gamepad2.left_trigger > TRIGGER_THRESHOLD;
+        boolean ready = turret.isOnTarget() && flywheel.atTargetRpm();
+        if (fire) {
+            indexer.setState(ready ? Indexer.State.FEEDING : Indexer.State.IDLE);
+        } else if (firePrev) {
+            indexer.setState(Indexer.State.IDLE);
+        }
+        firePrev = fire;
 
         scheduler.run();
 
@@ -87,8 +148,23 @@ public class MecanumTeleOp extends OpMode {
         telemetry.addData("Indexer", indexer.getState());
         telemetry.addData("Flywheel target", flywheel.getTargetRpm());
         telemetry.addData("Flywheel actual", "%.0f rpm", flywheel.getCurrentRpm());
-        telemetry.addData("At speed", flywheel.atTargetRpm());
+        telemetry.addData("Flywheel at speed", flywheel.atTargetRpm());
+        telemetry.addLine();
+        telemetry.addData("Aiming at", targetName());
+        telemetry.addData("Turret", turret.getState());
+        telemetry.addData("Target visible", limelight.hasTarget());
+        if (limelight.hasTarget()) {
+            telemetry.addData("tx (deg)", "%.2f", limelight.getTx());
+            telemetry.addData("Distance (m)", "%.2f", limelight.getDistanceMeters());
+        }
+        telemetry.addData("Turret on target", turret.isOnTarget());
+        telemetry.addData("READY TO SHOOT", ready);
         telemetry.update();
+    }
+
+    private String targetName() {
+        return limelight.getTargetTagId() == Constants.Vision.BLUE_GOAL_TAG
+                ? "BLUE goal (20)" : "RED goal (24)";
     }
 
     @Override
@@ -96,5 +172,7 @@ public class MecanumTeleOp extends OpMode {
         scheduler.cancelAll();
         drivebase.stop();
         flywheel.stop();
+        turret.stop();
+        hardware.limelight.stop();
     }
 }

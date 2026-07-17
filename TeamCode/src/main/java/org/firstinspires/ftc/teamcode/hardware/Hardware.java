@@ -1,11 +1,13 @@
 package org.firstinspires.ftc.teamcode.hardware;
 
+import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
 
-import org.firstinspires.ftc.robotcore.external.hardware.rev.RevHubOrientationOnRobot;
+import com.qualcomm.hardware.limelightvision.Limelight3A;
+import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import org.firstinspires.ftc.teamcode.Constants;
 
 public class Hardware {
@@ -19,6 +21,12 @@ public class Hardware {
 
     public DcMotorEx flywheelLeft;
     public DcMotorEx flywheelRight;
+
+    // Continuous-rotation servo that rotates the turret.
+    public CRServo turret;
+
+    // Limelight 3A smart camera (AprilTag targeting).
+    public Limelight3A limelight;
 
     // Gyro / orientation sensor (built into the REV Control/Expansion Hub).
     public IMU imu;
@@ -50,6 +58,15 @@ public class Hardware {
         // We run our own velocity PID, so let the motors take raw power.
         flywheelLeft.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         flywheelRight.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+
+        turret = hw.get(CRServo.class, Constants.Turret.SERVO);
+        turret.setDirection(Constants.Turret.DIRECTION);
+        turret.setPower(0);
+
+        limelight = hw.get(Limelight3A.class, Constants.Vision.LIMELIGHT);
+        limelight.pipelineSwitch(Constants.Vision.PIPELINE);
+        // Begin polling for results. Without start(), getLatestResult() is null.
+        limelight.start();
 
         setZeroPowerBehavior(Constants.Drive.ZERO_POWER_BEHAVIOR);
         setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);

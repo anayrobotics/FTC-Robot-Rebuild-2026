@@ -27,7 +27,10 @@ public class Flywheel implements Subsystem {
 
     public void setTargetRpm(double rpm) {
         double clamped = Range.clip(rpm, 0, Constants.Flywheel.MAX_RPM);
-        if (clamped != targetRpm) {
+        // Only reset the loop on a real setpoint jump (e.g. a preset press). Auto-
+        // ranging nudges the target a few RPM every loop as the distance estimate
+        // jitters; resetting on those tiny changes would wipe the D term each loop.
+        if (Math.abs(clamped - targetRpm) > Constants.Flywheel.RPM_TOLERANCE) {
             controller.reset();
         }
         targetRpm = clamped;
@@ -49,6 +52,29 @@ public class Flywheel implements Subsystem {
     public boolean atTargetRpm() {
         return targetRpm > 0
                 && Math.abs(targetRpm - currentRpm) <= Constants.Flywheel.RPM_TOLERANCE;
+    }
+
+    // Auto-ranging: given a distance to the goal (meters, e.g. from the
+    // Limelight), return the flywheel RPM to shoot it, linearly interpolated
+    // from the tuned table in Constants. Distances outside the table clamp to
+    // the nearest end so we always return a sane, in-range RPM.
+    public static double rpmForDistance(double meters) {
+        double[] d = Constants.Flywheel.RANGE_DISTANCES_M;
+        double[] r = Constants.Flywheel.RANGE_RPMS;
+
+        if (meters <= d[0]) {
+            return r[0];
+        }
+        if (meters >= d[d.length - 1]) {
+            return r[r.length - 1];
+        }
+        for (int i = 0; i < d.length - 1; i++) {
+            if (meters <= d[i + 1]) {
+                double t = (meters - d[i]) / (d[i + 1] - d[i]);
+                return r[i] + t * (r[i + 1] - r[i]);
+            }
+        }
+        return r[r.length - 1];
     }
 
     @Override
