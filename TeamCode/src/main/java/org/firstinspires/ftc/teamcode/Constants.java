@@ -112,6 +112,84 @@ public class Constants {
         public static final double MIN_AIM_POWER = 0.05;
     }
 
+    public static final class Hood {
+        // Positional servo that tilts the shooter hood, setting the ball's
+        // launch angle. Unlike the turret's CRServo, this is a standard Servo
+        // commanded to a repeatable position in [0, 1] and held there.
+        //
+        // Convention used below: a HIGHER position raises the hood to a steeper
+        // launch angle (shorter, higher arc). If yours is geared the other way,
+        // just swap DIRECTION or invert your preset/table values — nothing in
+        // the code assumes a direction beyond "bigger number = the servo turns
+        // one way".
+        public static final String SERVO = "hood";
+        public static final com.qualcomm.robotcore.hardware.Servo.Direction DIRECTION =
+                com.qualcomm.robotcore.hardware.Servo.Direction.FORWARD;
+
+        // Safe travel band. The hood is clamped to this every loop so a bad
+        // preset, a stale auto-range value, or a mis-scaled table can never
+        // drive the linkage into a hard stop and strip the servo. TIGHTEN these
+        // to the real mechanical limits once you've found them on the robot.
+        public static final double MIN_POSITION = 0.15;
+        public static final double MAX_POSITION = 0.85;
+
+        // Where the hood sits at init and when the shooter is idle (stowed low).
+        public static final double DEFAULT_POSITION = MIN_POSITION;
+
+        // Manual presets the operator can snap to (dpad left/right in TeleOp)
+        // when not auto-ranging: a close, flatter shot and a far, steeper shot.
+        public static final double NEAR_PRESET = 0.30;
+        public static final double FAR_PRESET = 0.70;
+
+        // Distance-based hood table for auto-ranging off the Limelight, exactly
+        // like Flywheel.RANGE_*. At RANGE_DISTANCES_M[i] meters from the goal,
+        // set the hood to RANGE_POSITIONS[i]. Values between points are linearly
+        // interpolated; outside the range they clamp to the nearest end. These
+        // are STARTING GUESSES — shoot at known distances and log the position
+        // that scores, then edit these. Both arrays must be the same length and
+        // the distances strictly increasing.
+        public static final double[] RANGE_DISTANCES_M = {1.0, 2.0, 3.0, 4.0};
+        public static final double[] RANGE_POSITIONS   = {0.30, 0.45, 0.60, 0.70};
+    }
+
+    public static final class DriveToPose {
+        // Point-to-point drive controller: three PIDs run in the ROBOT frame and
+        // drive the pose error (from PedroPathing's localizer) to zero.
+        //
+        // Forward and strafe are tuned separately because a mecanum strafes less
+        // efficiently than it drives forward, so they usually want different
+        // gains. Start them equal, then raise the strafe gains if sideways moves
+        // lag. Errors are in INCHES (translation) and RADIANS (heading); outputs
+        // are drive motor power.
+        public static final double FORWARD_kP = 0.03;
+        public static final double FORWARD_kI = 0.0;
+        public static final double FORWARD_kD = 0.002;
+
+        public static final double STRAFE_kP = 0.03;
+        public static final double STRAFE_kI = 0.0;
+        public static final double STRAFE_kD = 0.002;
+
+        public static final double HEADING_kP = 0.8;
+        public static final double HEADING_kI = 0.0;
+        public static final double HEADING_kD = 0.05;
+
+        // If an axis drives AWAY from the target (error grows, or the robot runs
+        // off), flip that axis. The correct signs depend on motor directions and
+        // how your field frame is oriented — verify each on the real robot.
+        public static final boolean INVERT_FORWARD = false;
+        public static final boolean INVERT_STRAFE = false;
+        public static final boolean INVERT_HEADING = false;
+
+        // Cap per-axis power so the robot eases into the target instead of
+        // slamming toward it and overshooting.
+        public static final double MAX_DRIVE_POWER = 0.6;
+        public static final double MAX_TURN_POWER = 0.5;
+
+        // Considered "at the target pose" once inside both bands.
+        public static final double POSITION_TOLERANCE_IN = 1.0;
+        public static final double HEADING_TOLERANCE_DEG = 2.0;
+    }
+
     public static final class Vision {
         public static final String LIMELIGHT = "limelight";
 

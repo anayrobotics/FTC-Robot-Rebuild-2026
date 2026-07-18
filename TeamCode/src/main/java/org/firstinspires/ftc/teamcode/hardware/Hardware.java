@@ -5,6 +5,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.hardware.Servo;
 
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
@@ -25,6 +26,9 @@ public class Hardware {
 
     // Continuous-rotation servo that rotates the turret.
     public CRServo turret;
+
+    // Positional servo that tilts the shooter hood (launch angle).
+    public Servo hood;
 
     // Limelight 3A smart camera (AprilTag targeting).
     public Limelight3A limelight;
@@ -67,6 +71,11 @@ public class Hardware {
         turret = hw.get(CRServo.class, Constants.Turret.SERVO);
         turret.setDirection(Constants.Turret.DIRECTION);
         turret.setPower(0);
+
+        hood = hw.get(Servo.class, Constants.Hood.SERVO);
+        hood.setDirection(Constants.Hood.DIRECTION);
+        // Start stowed so the hood doesn't slam to a random angle on init.
+        hood.setPosition(Constants.Hood.DEFAULT_POSITION);
 
         limelight = hw.get(Limelight3A.class, Constants.Vision.LIMELIGHT);
         limelight.pipelineSwitch(Constants.Vision.PIPELINE);

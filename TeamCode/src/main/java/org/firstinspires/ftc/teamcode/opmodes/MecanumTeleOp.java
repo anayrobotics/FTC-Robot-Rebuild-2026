@@ -11,6 +11,7 @@ import org.firstinspires.ftc.teamcode.commands.SetIntakeStateCommand;
 import org.firstinspires.ftc.teamcode.hardware.Hardware;
 import org.firstinspires.ftc.teamcode.subsystems.Drivebase;
 import org.firstinspires.ftc.teamcode.subsystems.Flywheel;
+import org.firstinspires.ftc.teamcode.subsystems.Hood;
 import org.firstinspires.ftc.teamcode.subsystems.Indexer;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Limelight;
@@ -28,6 +29,7 @@ public class MecanumTeleOp extends OpMode {
     private Intake intake;
     private Indexer indexer;
     private Flywheel flywheel;
+    private Hood hood;
     private Limelight limelight;
     private Turret turret;
 
@@ -42,13 +44,14 @@ public class MecanumTeleOp extends OpMode {
         intake = new Intake(hardware);
         indexer = new Indexer(hardware);
         flywheel = new Flywheel(hardware);
+        hood = new Hood(hardware);
         limelight = new Limelight(hardware);
         turret = new Turret(hardware, limelight);
 
         scheduler.reset();
         // Order matters: the Limelight must refresh BEFORE the Turret reads it,
         // so the turret aims on this loop's fresh vision data.
-        scheduler.registerSubsystem(intake, indexer, flywheel, limelight, turret);
+        scheduler.registerSubsystem(intake, indexer, flywheel, hood, limelight, turret);
 
         telemetry.addLine("Initialized.");
         telemetry.addData("Aiming at", targetName());
@@ -113,10 +116,16 @@ public class MecanumTeleOp extends OpMode {
             turret.setState(Turret.State.AUTO_AIM);
 
             double distance = limelight.getDistanceMeters();
-            double rpm = distance > 0
-                    ? Flywheel.rpmForDistance(distance)
-                    : Constants.Flywheel.SHOOT_RPM;   // no range read yet — use preset
-            flywheel.setTargetRpm(rpm);
+            if (distance > 0) {
+                // Range read is good: auto-range both the flywheel speed and the
+                // hood angle to the measured distance.
+                flywheel.setTargetRpm(Flywheel.rpmForDistance(distance));
+                hood.setForDistance(distance);
+            } else {
+                // No range read yet — fall back to the flywheel preset and leave
+                // the hood wherever the operator last put it.
+                flywheel.setTargetRpm(Constants.Flywheel.SHOOT_RPM);
+            }
         } else {
             // Not aiming: let the operator nudge the turret with the right stick.
             double manual = gamepad2.right_stick_x;
@@ -126,6 +135,17 @@ public class MecanumTeleOp extends OpMode {
             } else {
                 turret.setState(Turret.State.IDLE);
             }
+        }
+
+        // Manual hood presets (gamepad2): snap to a close/flat or far/steep
+        // angle. Useful when shooting without a range read, or to override the
+        // auto-ranged angle. dpad up/down are taken by the indexer, so the hood
+        // uses dpad left/right.
+        if (gamepad2.dpadLeftWasPressed()) {
+            hood.setNearPreset();
+        }
+        if (gamepad2.dpadRightWasPressed()) {
+            hood.setFarPreset();
         }
 
         // Hold left trigger to FIRE — but the indexer only feeds when we're
@@ -149,6 +169,7 @@ public class MecanumTeleOp extends OpMode {
         telemetry.addData("Flywheel target", flywheel.getTargetRpm());
         telemetry.addData("Flywheel actual", "%.0f rpm", flywheel.getCurrentRpm());
         telemetry.addData("Flywheel at speed", flywheel.atTargetRpm());
+        telemetry.addData("Hood position", "%.2f", hood.getCommandedPosition());
         telemetry.addLine();
         telemetry.addData("Aiming at", targetName());
         telemetry.addData("Turret", turret.getState());
@@ -172,6 +193,7 @@ public class MecanumTeleOp extends OpMode {
         scheduler.cancelAll();
         drivebase.stop();
         flywheel.stop();
+        hood.stop();
         turret.stop();
         hardware.limelight.stop();
     }
