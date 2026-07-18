@@ -40,6 +40,30 @@ public class Hardware {
     // navX2-Micro: the robot's heading source for both drive and PedroPathing.
     public final NavXIMU navxImu = new NavXIMU();
 
+    // Minimal init for isolated turret bring-up. Grabs ONLY the devices the
+    // turret assembly needs — the turret servo, the hood servo, and the
+    // Limelight — so the OpMode runs on a Control Hub that has just the turret
+    // assembly in its config (no drivetrain, intake, indexer, flywheel, or
+    // IMU). The full init() above would throw on the first missing motor.
+    //
+    // Use this OR init(), never both. Leaves every drive/shooter field null,
+    // so only run subsystems that touch turret/hood/limelight after calling it.
+    public void initTurretOnly(HardwareMap hw){
+        turret = hw.get(CRServo.class, Constants.Turret.SERVO);
+        turret.setDirection(Constants.Turret.DIRECTION);
+        turret.setPower(0);
+
+        hood = hw.get(Servo.class, Constants.Hood.SERVO);
+        hood.setDirection(Constants.Hood.DIRECTION);
+        // Start stowed so the hood doesn't slam to a random angle on init.
+        hood.setPosition(Constants.Hood.DEFAULT_POSITION);
+
+        limelight = hw.get(Limelight3A.class, Constants.Vision.LIMELIGHT);
+        limelight.pipelineSwitch(Constants.Vision.PIPELINE);
+        // Begin polling for results. Without start(), getLatestResult() is null.
+        limelight.start();
+    }
+
     public void init(HardwareMap hw){
         frontLeft = hw.get(DcMotorEx.class, Constants.Drive.FRONT_LEFT);
         frontRight = hw.get(DcMotorEx.class, Constants.Drive.FRONT_RIGHT);
