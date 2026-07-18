@@ -5,12 +5,14 @@ import com.pedropathing.follower.FollowerConstants;
 import com.pedropathing.ftc.FollowerBuilder;
 import com.pedropathing.ftc.drivetrains.MecanumConstants;
 import com.pedropathing.ftc.localization.Encoder;
-import com.pedropathing.ftc.localization.constants.DriveEncoderConstants;
+import com.pedropathing.ftc.localization.constants.TwoWheelConstants;
 import com.pedropathing.paths.PathConstraints;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.teamcode.Constants.Drive;
+import org.firstinspires.ftc.teamcode.Constants.Imu;
+import org.firstinspires.ftc.teamcode.localization.NavXIMU;
 
 /**
  * PedroPathing configuration for our mecanum robot.
@@ -52,26 +54,34 @@ public class Constants {
             .yVelocity(45.0);
 
     // ------------------------------------------------------------------
-    // Localizer: read the four drive-motor encoders. No extra odometry
-    // hardware needed, but it is the least accurate localizer — tune the
-    // ticks-to-inches multipliers and track dimensions before trusting it.
+    // Localizer: two dead-wheel odometry pods for translation + the navX2 for
+    // heading (via NavXIMU). Far more accurate than drive encoders, and the
+    // heading matches the field-centric drive since both read the same navX.
+    //
+    // Pod encoders plug into (unused) motor encoder ports; the names below are
+    // the CONFIG NAMES of whatever ports the pods are wired to. Directions,
+    // pod offsets, and ticks-to-inches all need on-robot tuning.
     // ------------------------------------------------------------------
-    public static DriveEncoderConstants localizerConstants = new DriveEncoderConstants()
-            .leftFrontMotorName(Drive.FRONT_LEFT)
-            .leftRearMotorName(Drive.BACK_LEFT)
-            .rightFrontMotorName(Drive.FRONT_RIGHT)
-            .rightRearMotorName(Drive.BACK_RIGHT)
-            .leftFrontEncoderDirection(Encoder.REVERSE)
-            .leftRearEncoderDirection(Encoder.REVERSE)
-            .rightFrontEncoderDirection(Encoder.FORWARD)
-            .rightRearEncoderDirection(Encoder.FORWARD)
-            // TODO tune: run Forward/Lateral/Turn tuners and paste results.
-            .forwardTicksToInches(1.0)
-            .strafeTicksToInches(1.0)
-            .turnTicksToInches(1.0)
-            // TODO tune: measure the robot's track width/length in inches.
-            .robotWidth(12.0)
-            .robotLength(12.0);
+    public static TwoWheelConstants localizerConstants = new TwoWheelConstants()
+            // TODO set: config names of the two ports the odometry pods plug into.
+            .forwardEncoder_HardwareMapName("forwardOdo")
+            .strafeEncoder_HardwareMapName("strafeOdo")
+            // TODO tune: flip a direction if that axis reads backwards in the
+            // Localization Test (push robot forward -> forward value must rise).
+            .forwardEncoderDirection(Encoder.FORWARD)
+            .strafeEncoderDirection(Encoder.FORWARD)
+            // TODO measure (inches, robot-centric from the tracking center):
+            //   forwardPodY = left/right offset of the FORWARD pod (+left)
+            //   strafePodX  = fwd/back offset of the STRAFE pod (+forward)
+            .forwardPodY(1.0)
+            .strafePodX(-2.5)
+            // TODO tune: run the Forward/Lateral tuners and paste the results.
+            .forwardTicksToInches(0.001989436789)
+            .strafeTicksToInches(0.001989436789)
+            // Heading from the navX2, not the hub IMU. The name is passed to
+            // NavXIMU.initialize(); orientation is unused by the navX adapter.
+            .IMU_HardwareMapName(Imu.NAVX)
+            .customIMU(new NavXIMU());
 
     // Global motion constraints for path following.
     public static PathConstraints pathConstraints = new PathConstraints(0.99, 100, 1, 1);
@@ -80,7 +90,7 @@ public class Constants {
     public static Follower createFollower(HardwareMap hardwareMap) {
         return new FollowerBuilder(followerConstants, hardwareMap)
                 .mecanumDrivetrain(driveConstants)
-                .driveEncoderLocalizer(localizerConstants)
+                .twoWheelLocalizer(localizerConstants)
                 .pathConstraints(pathConstraints)
                 .build();
     }

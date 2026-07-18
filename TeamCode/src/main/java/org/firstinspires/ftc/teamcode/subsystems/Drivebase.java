@@ -2,25 +2,25 @@ package org.firstinspires.ftc.teamcode.subsystems;
 
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
-import com.qualcomm.robotcore.hardware.IMU;
 
-import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.teamcode.Constants;
 import org.firstinspires.ftc.teamcode.hardware.Hardware;
+import org.firstinspires.ftc.teamcode.localization.NavXIMU;
 
 public class Drivebase {
     private final DcMotorEx frontLeft;
     private final DcMotorEx frontRight;
     private final DcMotorEx backLeft;
     private final DcMotorEx backRight;
-    private final IMU imu;
+    // Heading from the navX2 (same source PedroPathing uses for pose).
+    private final NavXIMU heading;
 
     public Drivebase(Hardware hardware){
         frontLeft = hardware.frontLeft;
         frontRight = hardware.frontRight;
         backLeft = hardware.backLeft;
         backRight = hardware.backRight;
-        imu = hardware.imu;
+        heading = hardware.navxImu;
     }
 
     public void drive(double axial, double lateral, double yaw){
@@ -68,11 +68,11 @@ public class Drivebase {
     }
 
     public double getHeading(){
-        return imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS);
+        return heading.getHeading();
     }
 
     public void resetHeading(){
-        imu.resetYaw();
+        heading.resetYaw();
     }
 
     public void stop(){

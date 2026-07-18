@@ -6,6 +6,7 @@ import com.qualcomm.robotcore.util.Range;
 import org.firstinspires.ftc.teamcode.Constants;
 import org.firstinspires.ftc.teamcode.commands.Subsystem;
 import org.firstinspires.ftc.teamcode.hardware.Hardware;
+import org.firstinspires.ftc.teamcode.tuning.TurretTuning;
 import org.firstinspires.ftc.teamcode.util.PIDFController;
 
 // Servo-driven turret that auto-aims at the goal AprilTag using the Limelight.
@@ -103,6 +104,11 @@ public class Turret implements Subsystem {
             servo.setPower(0);
             return;
         }
+
+        // Pull the latest gains so edits made live on the Panels dashboard take
+        // effect this loop without a re-deploy.
+        controller.setCoefficients(TurretTuning.kP, TurretTuning.kI,
+                TurretTuning.kD, TurretTuning.kF);
 
         // Setpoint is tx = 0; measurement is the current tx. The controller
         // returns a power whose sign turns us back toward center.

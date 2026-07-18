@@ -145,7 +145,13 @@ public class Constants {
     }
 
     public static final class Imu {
+        // Control Hub's built-in IMU (kept configured; heading now comes from navX).
         public static final String NAME = "imu";
+
+        // Kauai Labs navX2-Micro (device name in the robot config). This is now the
+        // single heading source for BOTH field-centric drive and PedroPathing pose,
+        // read through the SDK's built-in NavxMicroNavigationSensor driver.
+        public static final String NAVX = "navx";
 
         // Match to how the Control Hub is physically mounted.
         public static final RevHubOrientationOnRobot.LogoFacingDirection LOGO_DIRECTION =

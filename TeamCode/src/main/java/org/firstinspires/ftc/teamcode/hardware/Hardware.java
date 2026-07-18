@@ -9,6 +9,7 @@ import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import org.firstinspires.ftc.teamcode.Constants;
+import org.firstinspires.ftc.teamcode.localization.NavXIMU;
 
 public class Hardware {
     public DcMotorEx frontLeft;
@@ -29,7 +30,11 @@ public class Hardware {
     public Limelight3A limelight;
 
     // Gyro / orientation sensor (built into the REV Control/Expansion Hub).
+    // Still initialized, but heading now comes from the navX below.
     public IMU imu;
+
+    // navX2-Micro: the robot's heading source for both drive and PedroPathing.
+    public final NavXIMU navxImu = new NavXIMU();
 
     public void init(HardwareMap hw){
         frontLeft = hw.get(DcMotorEx.class, Constants.Drive.FRONT_LEFT);
@@ -72,12 +77,17 @@ public class Hardware {
         setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
-        imu = hw.get(IMU.class, Constants.Imu.NAME);
-        IMU.Parameters params = new IMU.Parameters(new RevHubOrientationOnRobot(
+        RevHubOrientationOnRobot hubOrientation = new RevHubOrientationOnRobot(
                 Constants.Imu.LOGO_DIRECTION,
-                Constants.Imu.USB_DIRECTION));
-        imu.initialize(params);
+                Constants.Imu.USB_DIRECTION);
+        imu = hw.get(IMU.class, Constants.Imu.NAME);
+        imu.initialize(new IMU.Parameters(hubOrientation));
         imu.resetYaw();
+
+        // Bring up the navX (waits out its power-on calibration) and zero it so
+        // "forward at init" is heading 0, matching the old hub-IMU behavior.
+        navxImu.initialize(hw, Constants.Imu.NAVX, hubOrientation);
+        navxImu.resetYaw();
     }
 
     private void setZeroPowerBehavior(DcMotor.ZeroPowerBehavior behavior){

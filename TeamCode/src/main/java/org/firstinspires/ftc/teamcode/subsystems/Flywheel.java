@@ -6,6 +6,7 @@ import com.qualcomm.robotcore.util.Range;
 import org.firstinspires.ftc.teamcode.Constants;
 import org.firstinspires.ftc.teamcode.commands.Subsystem;
 import org.firstinspires.ftc.teamcode.hardware.Hardware;
+import org.firstinspires.ftc.teamcode.tuning.FlywheelTuning;
 import org.firstinspires.ftc.teamcode.util.PIDFController;
 
 // Two-motor flywheel with closed-loop velocity control for exact RPM.
@@ -89,6 +90,11 @@ public class Flywheel implements Subsystem {
             right.setPower(0);
             return;
         }
+
+        // Pull the latest gains so edits made live on the Panels dashboard take
+        // effect this loop without a re-deploy.
+        controller.setCoefficients(FlywheelTuning.kP, FlywheelTuning.kI,
+                FlywheelTuning.kD, FlywheelTuning.kF);
 
         double power = Range.clip(controller.calculate(targetRpm, currentRpm), 0, 1);
         left.setPower(power);
