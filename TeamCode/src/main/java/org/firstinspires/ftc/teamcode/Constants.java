@@ -3,8 +3,6 @@ package org.firstinspires.ftc.teamcode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
-import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
-
 public class Constants {
 
     public static final class Drive {
@@ -145,12 +143,9 @@ public class Constants {
     }
 
     public static final class Imu {
-        public static final String NAME = "imu";
-
-        // Match to how the Control Hub is physically mounted.
-        public static final RevHubOrientationOnRobot.LogoFacingDirection LOGO_DIRECTION =
-                RevHubOrientationOnRobot.LogoFacingDirection.UP;
-        public static final RevHubOrientationOnRobot.UsbFacingDirection USB_DIRECTION =
-                RevHubOrientationOnRobot.UsbFacingDirection.FORWARD;
+        // Kauai Labs navX2-Micro (device name in the robot config). This is the
+        // single heading source for the drivetrain — the Control Hub's built-in
+        // IMU is intentionally NOT used.
+        public static final String NAVX = "navx";
     }
 }

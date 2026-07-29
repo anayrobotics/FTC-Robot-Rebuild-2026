@@ -4,11 +4,10 @@ import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
-import com.qualcomm.robotcore.hardware.IMU;
 
 import com.qualcomm.hardware.limelightvision.Limelight3A;
-import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import org.firstinspires.ftc.teamcode.Constants;
+import org.firstinspires.ftc.teamcode.localization.NavXIMU;
 
 public class Hardware {
     public DcMotorEx frontLeft;
@@ -28,8 +27,35 @@ public class Hardware {
     // Limelight 3A smart camera (AprilTag targeting).
     public Limelight3A limelight;
 
-    // Gyro / orientation sensor (built into the REV Control/Expansion Hub).
-    public IMU imu;
+    // navX2-Micro: the robot's heading source for field-centric drive. The
+    // Control Hub's built-in IMU is deliberately NOT used.
+    public final NavXIMU navxImu = new NavXIMU();
+
+    // Minimal init for isolated drivebase bring-up. Grabs ONLY the four drive
+    // motors and the navX IMU, so the OpMode runs on a Control Hub that has
+    // just those devices in its config (no intake, indexer, flywheel, turret,
+    // or Limelight). The full init() below would throw on the first missing
+    // device. Use this OR init(), never both.
+    public void initDriveOnly(HardwareMap hw){
+        frontLeft = hw.get(DcMotorEx.class, Constants.Drive.FRONT_LEFT);
+        frontRight = hw.get(DcMotorEx.class, Constants.Drive.FRONT_RIGHT);
+        backLeft = hw.get(DcMotorEx.class, Constants.Drive.BACK_LEFT);
+        backRight = hw.get(DcMotorEx.class, Constants.Drive.BACK_RIGHT);
+
+        frontLeft.setDirection(Constants.Drive.LEFT_DIRECTION);
+        backLeft.setDirection(Constants.Drive.LEFT_DIRECTION);
+        frontRight.setDirection(Constants.Drive.RIGHT_DIRECTION);
+        backRight.setDirection(Constants.Drive.RIGHT_DIRECTION);
+
+        setZeroPowerBehavior(Constants.Drive.ZERO_POWER_BEHAVIOR);
+        // Open-loop power — the drive encoders don't need to be wired for a
+        // bench test to move (RUN_USING_ENCODER would stall with no encoder).
+        setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+
+        // navX is the only heading source. It calibrates on power-up.
+        navxImu.initialize(hw, Constants.Imu.NAVX);
+        navxImu.resetYaw();
+    }
 
     public void init(HardwareMap hw){
         frontLeft = hw.get(DcMotorEx.class, Constants.Drive.FRONT_LEFT);
@@ -72,12 +98,9 @@ public class Hardware {
         setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
-        imu = hw.get(IMU.class, Constants.Imu.NAME);
-        IMU.Parameters params = new IMU.Parameters(new RevHubOrientationOnRobot(
-                Constants.Imu.LOGO_DIRECTION,
-                Constants.Imu.USB_DIRECTION));
-        imu.initialize(params);
-        imu.resetYaw();
+        // navX is the only heading source; the built-in hub IMU is not used.
+        navxImu.initialize(hw, Constants.Imu.NAVX);
+        navxImu.resetYaw();
     }
 
     private void setZeroPowerBehavior(DcMotor.ZeroPowerBehavior behavior){
