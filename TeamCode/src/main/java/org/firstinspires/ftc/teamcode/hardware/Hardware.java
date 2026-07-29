@@ -57,8 +57,9 @@ public class Hardware {
 
         hood = hw.get(Servo.class, Constants.Hood.SERVO);
         hood.setDirection(Constants.Hood.DIRECTION);
-        // Start stowed so the hood doesn't slam to a random angle on init.
-        hood.setPosition(Constants.Hood.DEFAULT_POSITION);
+        // Do NOT command a position here — writing one makes the servo move
+        // during init, which isn't allowed. The hood stays put (no PWM) until
+        // the OpMode drives it after start.
     }
 
     public void init(HardwareMap hw){
