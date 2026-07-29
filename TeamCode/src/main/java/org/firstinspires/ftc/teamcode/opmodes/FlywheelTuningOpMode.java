@@ -29,7 +29,7 @@ public class FlywheelTuningOpMode extends OpMode {
 
     @Override
     public void init() {
-        hardware.init(hardwareMap);
+        hardware.initFlywheelAndHood(hardwareMap);
         flywheel = new Flywheel(hardware);
         panels.debug("Flywheel PID tuning ready. A = spin up, B = stop.");
         panels.update(telemetry);

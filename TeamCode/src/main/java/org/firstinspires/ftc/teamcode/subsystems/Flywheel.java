@@ -21,12 +21,32 @@ public class Flywheel implements Subsystem {
     private double targetRpm = 0;
     private double currentRpm = 0;
 
+    // Open-loop bring-up mode: when true, periodic() ignores the PID and just
+    // writes openLoopPower straight to both motors. A closed-loop setTargetRpm()
+    // call takes control back.
+    private boolean openLoop = false;
+    private double openLoopPower = 0;
+
     public Flywheel(Hardware hardware) {
         left = hardware.flywheelLeft;
         right = hardware.flywheelRight;
     }
 
+    // Open-loop bring-up: spin both flywheel motors at a raw power in [0, 1]
+    // with NO velocity PID. Use this to just get the wheel turning and read the
+    // resulting RPM off getCurrentRpm() — no gains to tune, no encoder required.
+    public void setOpenLoopPower(double power) {
+        openLoop = true;
+        openLoopPower = Range.clip(power, 0, 1);
+    }
+
+    public double getOpenLoopPower() {
+        return openLoopPower;
+    }
+
     public void setTargetRpm(double rpm) {
+        // A closed-loop command overrides any open-loop power.
+        openLoop = false;
         double clamped = Range.clip(rpm, 0, Constants.Flywheel.MAX_RPM);
         // Only reset the loop on a real setpoint jump (e.g. a preset press). Auto-
         // ranging nudges the target a few RPM every loop as the distance estimate
@@ -83,6 +103,13 @@ public class Flywheel implements Subsystem {
         // Sample the encoder once per loop so the PID, atTargetRpm(), and telemetry
         // all use the same reading (and we only hit the hub once).
         currentRpm = left.getVelocity() / Constants.Flywheel.TICKS_PER_REV * 60.0;
+
+        if (openLoop) {
+            // Raw power straight through — no PID.
+            left.setPower(openLoopPower);
+            right.setPower(openLoopPower);
+            return;
+        }
 
         if (targetRpm <= 0) {
             // Let it coast to a stop rather than fighting the PID down to zero.

@@ -31,7 +31,7 @@ public class HoodTuningOpMode extends OpMode {
 
     @Override
     public void init() {
-        hardware.init(hardwareMap);
+        hardware.initFlywheelAndHood(hardwareMap);
         hood = new Hood(hardware);
         panels.debug("Hood tuning ready. A = TEST_POSITION, X = near, B = far, Y = stow.");
         panels.update(telemetry);
