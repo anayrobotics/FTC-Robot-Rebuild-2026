@@ -21,27 +21,33 @@ public class Flywheel implements Subsystem {
     private double targetRpm = 0;
     private double currentRpm = 0;
 
-    // Open-loop bring-up mode: when true, periodic() ignores the PID and just
-    // writes openLoopPower straight to both motors. A closed-loop setTargetRpm()
-    // call takes control back.
+    // Open-loop bring-up mode: when true, periodic() ignores the PID and writes
+    // openLoopLeft / openLoopRight straight to the two motors independently. A
+    // closed-loop setTargetRpm() call takes control back.
     private boolean openLoop = false;
-    private double openLoopPower = 0;
+    private double openLoopLeft = 0;
+    private double openLoopRight = 0;
 
     public Flywheel(Hardware hardware) {
         left = hardware.flywheelLeft;
         right = hardware.flywheelRight;
     }
 
-    // Open-loop bring-up: spin both flywheel motors at a raw power in [0, 1]
-    // with NO velocity PID. Use this to just get the wheel turning and read the
-    // resulting RPM off getCurrentRpm() — no gains to tune, no encoder required.
-    public void setOpenLoopPower(double power) {
+    // Open-loop bring-up: drive each flywheel motor independently at a raw power
+    // in [0, 1], with NO velocity PID. Use this to spin one motor at a time —
+    // e.g. to see which way each turns and decide which one needs reversing.
+    public void setMotorPowers(double leftPower, double rightPower) {
         openLoop = true;
-        openLoopPower = Range.clip(power, 0, 1);
+        openLoopLeft = Range.clip(leftPower, 0, 1);
+        openLoopRight = Range.clip(rightPower, 0, 1);
     }
 
-    public double getOpenLoopPower() {
-        return openLoopPower;
+    public double getLeftPower() {
+        return openLoopLeft;
+    }
+
+    public double getRightPower() {
+        return openLoopRight;
     }
 
     public void setTargetRpm(double rpm) {
@@ -105,9 +111,9 @@ public class Flywheel implements Subsystem {
         currentRpm = left.getVelocity() / Constants.Flywheel.TICKS_PER_REV * 60.0;
 
         if (openLoop) {
-            // Raw power straight through — no PID.
-            left.setPower(openLoopPower);
-            right.setPower(openLoopPower);
+            // Raw power straight through — no PID, each motor independent.
+            left.setPower(openLoopLeft);
+            right.setPower(openLoopRight);
             return;
         }
 
