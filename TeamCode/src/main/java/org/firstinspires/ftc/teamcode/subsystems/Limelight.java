@@ -103,8 +103,8 @@ public class Limelight implements Subsystem {
 
         // Assume no target until we actually find our tag in this frame. This is
         // the key safety point: if the camera returns null (not started / USB
-        // dropped) or an invalid/empty result, hasTarget stays false and the
-        // turret will hold still instead of chasing stale data.
+        // dropped) or an invalid/empty result, hasTarget stays false. The turret
+        // then returns to neutral rather than chasing stale data.
         hasTarget = false;
         visibleTagIds.clear();
 

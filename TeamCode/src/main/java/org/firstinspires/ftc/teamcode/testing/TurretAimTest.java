@@ -11,47 +11,26 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
 import org.firstinspires.ftc.teamcode.tuning.TurretTuning;
 
 /**
- * Test 5b — close the loop: let the turret chase the goal tag.
+ * Test 5b — positional-servo auto aim. The Axon's internal left/right limits
+ * must already be programmed and verified in TurretManualTest before this runs.
  *
- * <p>Do not run this until 4a passed (the feedback wire is alive and the travel
- * limit holds) and 5a passed (the camera actually sees your tag). If either is
- * unproven, an auto-aiming CRServo is a machine for winding your own wiring into
- * a knot.
+ * <p>The test starts at neutral and never tracks until A is pressed. This makes
+ * the first on-robot direction check deliberate instead of moving as soon as
+ * START is pressed.
  *
- * <h2>Get the direction right on the first press</h2>
- * Show the tag off to one side. The turret must swing TOWARD it. If it runs the
- * other way it will accelerate to the travel limit — press <b>Y</b> immediately
- * to flip INVERT_OUTPUT. Note this is a different flag from the one in test 4a:
- * that one was about the servo's gearing, this one is about how the camera is
- * mounted, and getting one right tells you nothing about the other.
- *
- * <h2>Then tune out the hunting</h2>
- * Raise kP until it reaches the target briskly, then add kD until it stops
- * overshooting. Leave kI at 0: a turret that briefly loses sight of the tag
- * would wind the integral up while blind and then slam.
- *
- * <p>If it never settles and buzzes back and forth across centre, that is not
- * a kP problem — it is MIN_AIM_POWER kicking the turret further than
- * AIM_TOLERANCE_DEG is wide, so it can never land inside the band. Widen the
- * tolerance or drop the floor.
- *
- * <h2>Watch the wind</h2>
- * Carry the tag in a circle around the robot and watch the travel figure climb.
- * At the limit the turret should UNWRAP — swing a full turn the other way to the
- * same heading — and come out still pointed at the tag. Confirm it does that,
- * and confirm it never reads LOCKED mid-swing.
- *
- * <p><b>Controls:</b> <b>X</b> blue goal · <b>B</b> red goal · <b>Y</b> flip
- * INVERT_OUTPUT · <b>A</b> park at origin · bumpers nudge kP.
+ * <p><b>Controls:</b> X blue goal; B red goal; A enables/disables tracking;
+ * Y flips the aim direction and disables tracking; bumpers tune kP. If the
+ * selected tag leaves the camera image, AUTO_AIM commands the servo's neutral
+ * input.
  */
 public class TurretAimTest extends OpMode {
-
     private final Hardware hardware = new Hardware();
     private final TelemetryManager panels = PanelsTelemetry.INSTANCE.getTelemetry();
 
     private Limelight limelight;
     private Turret turret;
-    private boolean parked = false;
+    // Begin in a known safe state. The operator must deliberately enable aiming.
+    private boolean aimingEnabled = false;
 
     @Override
     public void init() {
@@ -59,14 +38,16 @@ public class TurretAimTest extends OpMode {
         hardware.initLimelight(hardwareMap);
         limelight = new Limelight(hardware);
         turret = new Turret(hardware, limelight);
-        telemetry.addLine("Turret auto-aim. Hand on STOP.");
-        telemetry.addLine("If it runs the wrong way, press Y.");
+        telemetry.addLine("Starts at neutral. A enables tracking; hand on STOP.");
+        telemetry.addLine("If it moves away from the tag: Y, then A to retest.");
         telemetry.update();
     }
 
     @Override
     public void start() {
-        turret.setState(Turret.State.AUTO_AIM);
+        // Command neutral as soon as the OpMode starts, before the operator
+        // opts in to camera tracking.
+        turret.setState(Turret.State.RETURN_TO_ORIGIN);
     }
 
     @Override
@@ -79,9 +60,12 @@ public class TurretAimTest extends OpMode {
         }
         if (gamepad1.yWasPressed()) {
             TurretTuning.INVERT_OUTPUT = !TurretTuning.INVERT_OUTPUT;
+            // Changing sign while tracking would make an immediate uncontrolled
+            // reverse move. Return neutral first; A explicitly begins the retest.
+            aimingEnabled = false;
         }
         if (gamepad1.aWasPressed()) {
-            parked = !parked;
+            aimingEnabled = !aimingEnabled;
         }
         if (gamepad1.rightBumperWasPressed()) {
             TurretTuning.kP += 0.002;
@@ -90,42 +74,35 @@ public class TurretAimTest extends OpMode {
             TurretTuning.kP = Math.max(0, TurretTuning.kP - 0.002);
         }
 
-        turret.setState(parked ? Turret.State.RETURN_TO_ORIGIN : Turret.State.AUTO_AIM);
-
-        // Vision must refresh before the turret reads it, or the aim runs a loop
-        // behind — which shows up as overshoot you will wrongly blame on kD.
+        turret.setState(aimingEnabled ? Turret.State.AUTO_AIM : Turret.State.RETURN_TO_ORIGIN);
         limelight.periodic();
         turret.periodic();
 
-        telemetry.addData(">> ", parked ? "PARKED (A to resume aiming)"
-                : turret.isUnwinding() ? "UNWRAPPING — full turn the other way"
+        telemetry.addData(">> ", !aimingEnabled ? "NEUTRAL — press A to enable aiming"
                 : turret.isOnTarget() ? "LOCKED"
                 : limelight.hasTarget() ? "aiming..."
-                : "NO TARGET — turret holding still");
+                : "NO TARGET — RETURNING NEUTRAL");
         telemetry.addData(">> tx", limelight.hasTarget()
                 ? String.format("%+.2f deg  (band +/-%.1f)", limelight.getTx(),
                         TurretTuning.AIM_TOLERANCE_DEG)
                 : "--");
-        telemetry.addData(">> Travel", "%+.1f deg of %.0f", turret.getTravelDeg(),
-                TurretTuning.MAX_TRAVEL_DEG);
-        telemetry.addLine();
+        telemetry.addData("Commanded input", "%.3f   neutral %.3f", turret.getCommandedPosition(),
+                TurretTuning.NEUTRAL_POSITION);
         telemetry.addData("Tag", "%d   (X blue / B red)", limelight.getTargetTagId());
-        telemetry.addData("INVERT_OUTPUT", "%s   (Y flips — must turn TOWARD the tag)",
+        telemetry.addData("Aiming enabled", "%s   (A toggles / Y disables)", aimingEnabled);
+        telemetry.addData("INVERT_OUTPUT", "%s   (Y flips + returns neutral)",
                 TurretTuning.INVERT_OUTPUT);
-        telemetry.addData("kP", "%.4f   (bumpers)", TurretTuning.kP);
-        telemetry.addData("kD", "%.5f", TurretTuning.kD);
-        telemetry.addLine();
-        telemetry.addLine("Buzzing at centre and never settling means");
-        telemetry.addLine("MIN_AIM_POWER overshoots AIM_TOLERANCE_DEG.");
+        telemetry.addData("kP", "%.4f position/s/deg   (bumpers)", TurretTuning.kP);
+        telemetry.addData("Max aim rate", "%.3f position/s", TurretTuning.MAX_AIM_RATE);
+        telemetry.addLine("After a successful direction test, copy the final inversion into Constants.");
 
         panels.addData("tx", limelight.hasTarget() ? limelight.getTx() : 0.0);
         panels.addData("hasTarget", limelight.hasTarget());
         panels.addData("onTarget", turret.isOnTarget());
-        panels.addData("travelDeg", turret.getTravelDeg());
-        panels.addData("unwinding", turret.isUnwinding());
+        panels.addData("aimingEnabled", aimingEnabled);
+        panels.addData("commandedPosition", turret.getCommandedPosition());
+        panels.addData("neutralPosition", TurretTuning.NEUTRAL_POSITION);
         panels.addData("kP", TurretTuning.kP);
-        panels.addData("kI", TurretTuning.kI);
-        panels.addData("kD", TurretTuning.kD);
         panels.update(telemetry);
     }
 

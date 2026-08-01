@@ -1,7 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.Servo;
 
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 
@@ -101,91 +101,37 @@ public class Constants {
     }
 
     public static final class Turret {
-        // Continuous-rotation servo that spins the turret. A CRServo (not a
-        // positional servo) is used so the aim loop can command a rotation
-        // *speed* proportional to how far off target we are.
-        //
-        // REAL-LIFE WARNING: a CRServo has no position feedback and no built-in
-        // travel limit, so nothing here stops the turret rotating past its
-        // mechanical range and twisting the wiring. Add a hard mechanical stop
-        // or a slip ring, and never leave it in AUTO_AIM without a valid target.
+        // Positional Axon servo in SERVO MODE. The Axon Programmer's left/right
+        // limits are the primary mechanical protection for the wiring. Java
+        // sends standard FTC Servo positions (0..1); it never asks the turret to
+        // make a full revolution or performs the old CR-servo "unwrap" move.
         public static final String SERVO = "turret";
-        public static final DcMotorSimple.Direction DIRECTION = DcMotorSimple.Direction.FORWARD;
+        public static final Servo.Direction DIRECTION = Servo.Direction.FORWARD;
 
-        // The Axon MAX+ MK2's fourth wire: an ABSOLUTE analog position feedback
-        // of the servo's output shaft, 0 V at 0 degrees rising linearly to the
-        // channel's full scale (3.3 V) at 360. Wire it to an analog input on the
-        // hub and add it to the robot config as an "Analog Input" with this name.
-        //
-        // It reads true angle with no zeroing and no drift, which is what makes
-        // RETURN_TO_ORIGIN possible on a servo that otherwise has no idea where
-        // it is. Note it wraps at 360 -> 0, so all the maths below compares
-        // angles as a shortest-path difference, never as raw subtraction.
-        public static final String ENCODER = "turretEncoder";
+        // Standard FTC input position that produces the Axon's programmed
+        // neutral. This is NOT the Axon Programmer's numeric "Servo Neutral"
+        // setting; that setting changes how the servo interprets this PWM input.
+        public static final double NEUTRAL_POSITION = 0.50;
 
-        // Raw feedback angle (degrees, straight off the wire) when the turret
-        // points straight ahead. MEASURE THIS: run "Turret PID Tuning", push the
-        // turret to dead centre by hand, and copy the reported raw angle here.
-        public static final double ORIGIN_DEG = 180.0;
+        // Software bounds for the standard FTC input range. The Axon's internal
+        // left/right limits must be configured tighter than the wiring-safe
+        // physical range and remain the final safety backstop.
+        public static final double MIN_POSITION = 0.0;
+        public static final double MAX_POSITION = 1.0;
 
-        // Return-to-origin loop. Proportional only — it's a park move, not a
-        // tracking one, so there's nothing to damp and no steady-state error
-        // worth integrating out.
-        public static final double RETURN_kP = 0.010;
-
-        // Cap the park speed. Lower than MAX_AIM_POWER because this runs
-        // unattended while the driver is doing something else.
-        public static final double MAX_RETURN_POWER = 0.35;
-
-        // Inside this many degrees of ORIGIN_DEG, we're home and stop.
-        public static final double RETURN_TOLERANCE_DEG = 2.0;
-
-        // How far either side of the origin the turret may wind before it has to
-        // unwrap. 180 either way = 360 of total travel, i.e. never more than one
-        // full turn of the wiring.
-        //
-        // Aiming can always reach ANY heading within this: a heading is only
-        // ever 180 from the origin the short way round. What the limit costs is
-        // the FREEDOM to get there the long way round, which is what would wind
-        // the wires up over a match.
-        public static final double MAX_TRAVEL_DEG = 180.0;
-
-        // Once at the limit, the turret unwraps by swinging a full turn the
-        // other way to the SAME physical heading (+185 becomes -175). Faster
-        // than the park loop because the turret is off the goal for the whole
-        // move and can't shoot until it lands.
-        public static final double MAX_UNWIND_POWER = 0.6;
-
-        // Travel has to come back this far inside the limit before another
-        // unwrap may trigger. Without it, a goal sitting exactly on the boundary
-        // would unwrap, land on the opposite boundary, and unwrap straight back
-        // -- spinning in circles instead of shooting. Guarded, the turret simply
-        // holds at the limit and refuses to cross.
-        public static final double UNWIND_HYSTERESIS_DEG = 10.0;
-
-        // If the turret runs AWAY from the origin when parking (error grows, it
-        // takes the long way round), flip this. Separate from INVERT_OUTPUT:
-        // that one is the camera's tx-vs-power sign, this is the feedback
-        // wire's angle-vs-power sign, and they're independent facts about how
-        // the servo and camera are each mounted.
-        public static final boolean INVERT_RETURN = false;
-
-        // Aim loop runs on the Limelight's horizontal error (tx, in degrees) and
-        // drives it to zero. Output is servo power. No feedforward (kF) because
-        // the setpoint is tx = 0, and no integral (kI) because a turret that can
-        // briefly lose its target would wind the integral up and overshoot.
+        // Aim is a position-rate loop: tx (degrees) times kP produces servo
+        // input-position units per second, then periodic() integrates it. Tune
+        // kP first; this is deliberately independent of loop rate.
         public static final double kP = 0.020;
-        public static final double kI = 0.0;
-        public static final double kD = 0.0015;
-        public static final double kF = 0.0;
+        public static final double MAX_AIM_RATE = 0.30;
 
         // If the turret drives AWAY from the target (runs to a hard stop or
         // oscillates and grows), flip this. The correct sign depends on which
         // way the servo is geared to the turret and how the camera is mounted.
         public static final boolean INVERT_OUTPUT = false;
 
-        // Inside this many degrees we consider ourselves aimed and stop moving,
-        // which kills the servo jitter you'd otherwise get right at center.
+        // Inside this many degrees we consider ourselves aimed and hold the last
+        // commanded position rather than hunting around the image center.
         public static final double AIM_TOLERANCE_DEG = 1.0;
 
         // The band that KEEPS a burst feeding once it has started, the same idea
@@ -196,22 +142,13 @@ public class Constants {
         // stopping the feed for it costs a shot every time.
         public static final double KEEP_AIM_TOLERANCE_DEG = 3.0;
 
-        // Cap the aim speed so the turret slews smoothly instead of slamming.
-        public static final double MAX_AIM_POWER = 0.6;
-
-        // A CRServo below this power usually can't overcome its own stiction, so
-        // when we do need to move we floor the command to at least this much.
-        public static final double MIN_AIM_POWER = 0.05;
-
-        // Speed of a manual dpad nudge in TeleOp. Deliberately slower than
-        // MAX_AIM_POWER: this is the driver hunting for a target by eye, with
-        // nothing watching the travel limits, so it should creep.
-        public static final double MANUAL_NUDGE_POWER = 0.25;
+        // Rate used for a manual dpad nudge, in input-position units per second.
+        public static final double MANUAL_NUDGE_RATE = 0.15;
     }
 
     public static final class Hood {
         // Positional servo that tilts the shooter hood, setting the ball's
-        // launch angle. Unlike the turret's CRServo, this is a standard Servo
+        // launch angle. Like the turret, this is a standard Servo
         // commanded to a repeatable position in [0, 1] and held there.
         //
         // Convention used below: a HIGHER position raises the hood to a steeper
