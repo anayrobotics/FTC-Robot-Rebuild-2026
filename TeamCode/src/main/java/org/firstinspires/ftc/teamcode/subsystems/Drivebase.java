@@ -75,6 +75,13 @@ public class Drivebase {
         heading.resetYaw();
     }
 
+    // Declares the robot's current heading (CCW-positive radians) rather than
+    // assuming it's zero — for an auto that starts pointed somewhere other than
+    // downfield. resetHeading() is this with 0.
+    public void setHeading(double headingRad){
+        heading.setHeading(headingRad);
+    }
+
     public void stop(){
         frontLeft.setPower(0);
         frontRight.setPower(0);

@@ -23,6 +23,31 @@ import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
  *
  * <p>{@code resetYaw()} uses a software offset (rather than the sensor's own
  * zero) so it works regardless of driver support and never blocks.
+ *
+ * <h2>If the navX isn't facing the right way</h2>
+ * Three different problems, three different fixes — an offset only solves one
+ * of them:
+ * <ol>
+ *   <li><b>Rotated about the vertical axis</b> (board still lying flat, but
+ *       pointing 90°/180°/any angle off from robot-forward). <b>Nothing to
+ *       do.</b> The rotation is a constant, and {@code resetYaw()} subtracts
+ *       whatever it reads at that moment, so the constant cancels. Just zero
+ *       the robot pointing downfield and it's correct.</li>
+ *   <li><b>Heading counts backwards</b> (goes DOWN when the robot turns CCW),
+ *       which is what you get when the board is mounted upside-down. Set
+ *       {@link #INVERT} to {@code true}.</li>
+ *   <li><b>Yaw axis isn't vertical</b> — the board is on its edge, mounted to a
+ *       side rail or standing up. This one an offset CANNOT fix: yaw is no
+ *       longer rotation about the sensor's Z, so {@code firstAngle} below is
+ *       reading pitch or roll instead of heading. The symptom is a heading that
+ *       barely moves when you spin the robot but swings when you tilt it. Fix
+ *       it by remounting the navX flat (much the easiest), or by reading a
+ *       different angle out of the {@link Orientation} in
+ *       {@code readRawYawRad()}.</li>
+ * </ol>
+ * Separately, if you need "zero" to mean something other than "where the robot
+ * points at init" — an auto that starts facing 90°, say — use
+ * {@link #setHeading(double)} instead of {@code resetYaw()}.
  */
 public class NavXIMU implements CustomIMU {
 
@@ -69,7 +94,31 @@ public class NavXIMU implements CustomIMU {
 
     @Override
     public void resetYaw() {
-        yawOffsetRad = readRawYawRad();
+        setHeading(0.0);
+    }
+
+    /**
+     * Declares what the robot's heading IS right now, and offsets the sensor so
+     * {@link #getHeading()} reports that from here on. {@code resetYaw()} is
+     * just {@code setHeading(0)}.
+     *
+     * <p>Use this when you can't (or don't want to) zero with the robot pointed
+     * at field-forward — e.g. an auto that starts on a wall facing 90°: call
+     * {@code setHeading(Math.toRadians(90))} at init and field-centric drive and
+     * PedroPathing both agree with the real field from the first loop.
+     *
+     * <p>NOTE this is NOT the knob for a navX that's bolted on rotated. A rigid
+     * mounting rotation cancels out of {@code getHeading()} the moment you call
+     * {@code resetYaw()} (both the reading and the captured offset shift by the
+     * same amount), so a mount rotated about the vertical axis needs no
+     * correction at all — just zero it pointing downfield. See {@link #INVERT}
+     * for a navX that counts backwards, and the class docs for a navX whose
+     * yaw axis isn't vertical.
+     *
+     * @param headingRad the robot's true heading now, CCW-positive radians.
+     */
+    public void setHeading(double headingRad) {
+        yawOffsetRad = readRawYawRad() - headingRad;
     }
 
     private double readRawYawRad() {
