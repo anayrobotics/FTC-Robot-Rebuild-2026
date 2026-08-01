@@ -99,6 +99,46 @@ public class Hardware {
         navxImu.resetYaw();
     }
 
+    /**
+     * Focused bring-up for a drivebase + intake + indexer integration test: the
+     * four mecanum drive motors, the navX2-Micro heading source, and the single
+     * intake and indexer motors — nothing else. It deliberately skips the
+     * flywheel, turret, hood, Limelight and the built-in hub IMU, so this runs
+     * on a Control Hub configured with only these devices. Heading comes
+     * entirely from the navX (same convention {@code init()} uses).
+     */
+    public void initDriveIntakeIndexer(HardwareMap hw){
+        frontLeft = hw.get(DcMotorEx.class, Constants.Drive.FRONT_LEFT);
+        frontRight = hw.get(DcMotorEx.class, Constants.Drive.FRONT_RIGHT);
+        backLeft = hw.get(DcMotorEx.class, Constants.Drive.BACK_LEFT);
+        backRight = hw.get(DcMotorEx.class, Constants.Drive.BACK_RIGHT);
+
+        frontLeft.setDirection(Constants.Drive.LEFT_DIRECTION);
+        backLeft.setDirection(Constants.Drive.LEFT_DIRECTION);
+        frontRight.setDirection(Constants.Drive.RIGHT_DIRECTION);
+        backRight.setDirection(Constants.Drive.RIGHT_DIRECTION);
+
+        setZeroPowerBehavior(Constants.Drive.ZERO_POWER_BEHAVIOR);
+        setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
+        intake = hw.get(DcMotorEx.class, Constants.Intake.MOTOR);
+        intake.setDirection(Constants.Intake.DIRECTION);
+
+        indexer = hw.get(DcMotorEx.class, Constants.Indexer.MOTOR);
+        indexer.setDirection(Constants.Indexer.DIRECTION);
+
+        // The navX ignores hubOrientation (it's not a REV hub IMU), but its
+        // initialize() signature takes one, so pass the configured mounting.
+        RevHubOrientationOnRobot hubOrientation = new RevHubOrientationOnRobot(
+                Constants.Imu.LOGO_DIRECTION,
+                Constants.Imu.USB_DIRECTION);
+        // Bring up the navX (waits out its power-on calibration) and zero it so
+        // "forward at init" is heading 0.
+        navxImu.initialize(hw, Constants.Imu.NAVX, hubOrientation);
+        navxImu.resetYaw();
+    }
+
     private void setZeroPowerBehavior(DcMotor.ZeroPowerBehavior behavior){
         frontLeft.setZeroPowerBehavior(behavior);
         frontRight.setZeroPowerBehavior(behavior);
