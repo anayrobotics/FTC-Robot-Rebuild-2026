@@ -114,6 +114,29 @@ public class Constants {
         // Inside this many degrees of ORIGIN_DEG, we're home and stop.
         public static final double RETURN_TOLERANCE_DEG = 2.0;
 
+        // How far either side of the origin the turret may wind before it has to
+        // unwrap. 180 either way = 360 of total travel, i.e. never more than one
+        // full turn of the wiring.
+        //
+        // Aiming can always reach ANY heading within this: a heading is only
+        // ever 180 from the origin the short way round. What the limit costs is
+        // the FREEDOM to get there the long way round, which is what would wind
+        // the wires up over a match.
+        public static final double MAX_TRAVEL_DEG = 180.0;
+
+        // Once at the limit, the turret unwraps by swinging a full turn the
+        // other way to the SAME physical heading (+185 becomes -175). Faster
+        // than the park loop because the turret is off the goal for the whole
+        // move and can't shoot until it lands.
+        public static final double MAX_UNWIND_POWER = 0.6;
+
+        // Travel has to come back this far inside the limit before another
+        // unwrap may trigger. Without it, a goal sitting exactly on the boundary
+        // would unwrap, land on the opposite boundary, and unwrap straight back
+        // -- spinning in circles instead of shooting. Guarded, the turret simply
+        // holds at the limit and refuses to cross.
+        public static final double UNWIND_HYSTERESIS_DEG = 10.0;
+
         // If the turret runs AWAY from the origin when parking (error grows, it
         // takes the long way round), flip this. Separate from INVERT_OUTPUT:
         // that one is the camera's tx-vs-power sign, this is the feedback

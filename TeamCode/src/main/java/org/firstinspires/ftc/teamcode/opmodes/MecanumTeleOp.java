@@ -250,8 +250,9 @@ public abstract class MecanumTeleOp extends OpMode {
         }
         telemetry.addData("Turret", "%s%s", turret.getState(),
                 turret.isOnTarget() ? " — LOCKED" : "");
-        telemetry.addData("Turret angle", "%.1f deg (%+.1f from origin)",
-                turret.getAngleDeg(), turret.getOriginErrorDeg());
+        telemetry.addData("Turret wind", "%+.0f deg of %.0f%s",
+                turret.getTravelDeg(), Constants.Turret.MAX_TRAVEL_DEG,
+                turret.isUnwinding() ? " — UNWRAPPING" : "");
         telemetry.addData("Flywheel", "%.0f / %.0f rpm%s",
                 flywheel.getCurrentRpm(), flywheel.getTargetRpm(),
                 flywheel.atTargetRpm() ? " — at speed" : "");
@@ -272,6 +273,11 @@ public abstract class MecanumTeleOp extends OpMode {
         }
         if (ready) {
             return fire ? ">> FIRING" : ">> READY TO SHOOT — hold LT to fire";
+        }
+        if (turret.isUnwinding()) {
+            // A full-turn swing off the goal and back. Say so, or it reads as
+            // the turret having lost the plot mid-match.
+            return ">> REVVING — turret unwrapping its wires, hold on";
         }
         if (turretParked) {
             // Parked can't shoot: isOnTarget() is false outside AUTO_AIM. Say so
