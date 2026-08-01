@@ -26,8 +26,8 @@ public class Constants {
         //
         // This is the only correct place to fix a direction problem. Do not add
         // sign flips to Drivebase.drive() — see the comment there for why.
-        public static final DcMotor.Direction FRONT_LEFT_DIRECTION = DcMotor.Direction.REVERSE;
-        public static final DcMotor.Direction BACK_LEFT_DIRECTION = DcMotor.Direction.REVERSE;
+        public static final DcMotor.Direction FRONT_LEFT_DIRECTION = DcMotor.Direction.FORWARD;
+        public static final DcMotor.Direction BACK_LEFT_DIRECTION = DcMotor.Direction.FORWARD;
         public static final DcMotor.Direction FRONT_RIGHT_DIRECTION = DcMotor.Direction.FORWARD;
         public static final DcMotor.Direction BACK_RIGHT_DIRECTION = DcMotor.Direction.FORWARD;
 
@@ -63,8 +63,8 @@ public class Constants {
         public static final String RIGHT_MOTOR = "flywheelRight";
 
         // The two motors face opposite ways, so one is reversed to spin the wheel together.
-        public static final DcMotor.Direction LEFT_DIRECTION = DcMotor.Direction.FORWARD;
-        public static final DcMotor.Direction RIGHT_DIRECTION = DcMotor.Direction.REVERSE;
+        public static final DcMotor.Direction LEFT_DIRECTION = DcMotor.Direction.REVERSE;
+        public static final DcMotor.Direction RIGHT_DIRECTION = DcMotor.Direction.FORWARD;
 
         // Encoder counts per revolution of the flywheel shaft. 28 = bare REV/goBILDA
         // 6000 rpm motor (no gearbox). Change if your flywheel is geared.
