@@ -31,9 +31,22 @@ import org.firstinspires.ftc.teamcode.tuning.HoodTuning;
  * only mean something once you are shooting at a real goal — come back to those
  * after test 6a.
  *
- * <p><b>Controls:</b> bumpers move the hood +/- 0.01 · dpad up/down +/- 0.05 ·
- * <b>X</b> near preset · <b>B</b> far preset · <b>Y</b> stow · <b>A</b> stores
- * the current position as MIN, <b>dpad right</b> stores it as MAX.
+ * <p><b>Controls:</b> <b>Y</b> cuts/restores hood power · bumpers move the hood
+ * +/- 0.01 · dpad up/down +/- 0.05 · <b>X</b> near preset · <b>B</b> far preset ·
+ * <b>dpad left</b> stow · <b>A</b> stores the current position as MIN,
+ * <b>dpad right</b> stores it as MAX.
+ *
+ * <h2>The hood starts limp</h2>
+ * The servo is not energized until you press <b>Y</b>, and <b>Y</b> again cuts
+ * it dead. Move the hood through its travel by hand first, with no power on it,
+ * and you will know roughly where the stops are before you ever ask the servo to
+ * hold a number. When it does buzz, <b>Y</b> is the recovery — a real PWM cut,
+ * no power-cycle needed.
+ *
+ * <p>It arms in the middle of the current band rather than at
+ * {@code DEFAULT_POSITION}, because that constant is defined as
+ * {@code MIN_POSITION}: a hood sitting exactly on the bottom clamp swallows
+ * every downward nudge and looks dead.
  */
 public class HoodTest extends OpMode {
 
@@ -46,12 +59,17 @@ public class HoodTest extends OpMode {
     public void init() {
         hardware.initHood(hardwareMap);
         hood = new Hood(hardware);
-        // The hood is where Hardware.initHood left it: the stowed default. Start
-        // the test from there rather than jumping somewhere new.
-        HoodTuning.TEST_POSITION = Constants.Hood.DEFAULT_POSITION;
+        // Limp until you ask for it. initHood() deliberately leaves the servo
+        // un-energized, so this is the one chance to feel out the travel by hand
+        // before anything holds torque against a stop.
+        hood.setPwmEnabled(false);
+        // Arm in the middle of the band, not at DEFAULT_POSITION — that is
+        // MIN_POSITION, and a hood on the bottom clamp ignores half the controls.
+        HoodTuning.TEST_POSITION = (HoodTuning.MIN_POSITION + HoodTuning.MAX_POSITION) / 2.0;
         hood.setPosition(HoodTuning.TEST_POSITION);
-        telemetry.addLine("Hood test. Nudge ONE STEP at a time toward the stops.");
-        telemetry.addLine("Hand on the stop switch. A buzzing servo is stalling.");
+        telemetry.addLine("Hood test. Power is OFF — move the hood by hand first.");
+        telemetry.addLine("Y energizes it (and Y again kills it if it buzzes).");
+        telemetry.addLine("Then nudge ONE STEP at a time toward the stops.");
         telemetry.update();
     }
 
@@ -81,7 +99,11 @@ public class HoodTest extends OpMode {
         if (gamepad1.bWasPressed()) {
             hood.setFarPreset();
         }
+        // The kill switch, and the only thing that ever energizes the servo.
         if (gamepad1.yWasPressed()) {
+            hood.setPwmEnabled(!hood.isPwmEnabled());
+        }
+        if (gamepad1.dpadLeftWasPressed()) {
             hood.stop();
         }
 
@@ -99,12 +121,15 @@ public class HoodTest extends OpMode {
 
         boolean clamped = Math.abs(hood.getTargetPosition() - hood.getCommandedPosition()) > 1e-6;
 
+        telemetry.addData(">> Power", hood.isPwmEnabled()
+                ? "LIVE — Y cuts it the instant it buzzes"
+                : "LIMP — free to move by hand. Y energizes it.");
         telemetry.addData(">> Commanded", "%.3f%s", hood.getCommandedPosition(),
                 clamped ? "  (CLAMPED — asked for " + String.format("%.3f", hood.getTargetPosition()) + ")" : "");
         telemetry.addData(">> Safe band", "%.3f .. %.3f   (A = set MIN, dpad right = set MAX)",
                 HoodTuning.MIN_POSITION, HoodTuning.MAX_POSITION);
         telemetry.addLine();
-        telemetry.addData("Presets", "near %.3f (X)   far %.3f (B)   stow %.3f (Y)",
+        telemetry.addData("Presets", "near %.3f (X)   far %.3f (B)   stow %.3f (dpad left)",
                 HoodTuning.NEAR_PRESET, HoodTuning.FAR_PRESET, Constants.Hood.DEFAULT_POSITION);
         telemetry.addLine();
         telemetry.addLine("Bumpers +/-0.01, dpad up/down +/-0.05.");
@@ -122,7 +147,10 @@ public class HoodTest extends OpMode {
 
     @Override
     public void stop() {
-        hood.stop();
+        // Cut power rather than stowing. Stow is DEFAULT_POSITION, and if that
+        // is the position you just found stalls the servo, driving to it on the
+        // way out re-creates the fault every time you end the test.
+        hood.setPwmEnabled(false);
         hood.periodic();
     }
 }

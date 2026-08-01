@@ -65,8 +65,17 @@ import org.firstinspires.ftc.teamcode.tuning.HoodTuning;
  * the target RPM · <b>right bumper</b> intake in · <b>right trigger</b> intake
  * out · <b>left bumper</b> indexer feed · <b>left trigger</b> indexer reverse ·
  * dpad left/right hood ∓0.01 · dpad up/down hood ±0.05 · <b>X</b> near preset ·
- * <b>B</b> far preset · <b>Y</b> stow. Only the flywheel latches; let go of
- * anything else and it stops.
+ * <b>B</b> far preset · <b>Y</b> cuts/restores hood power. Only the flywheel
+ * and the hood power latch; let go of anything else and it stops.
+ *
+ * <h2>The hood starts limp, on purpose</h2>
+ * Nothing energizes the hood servo until you press <b>Y</b>, and <b>Y</b> again
+ * cuts it dead — a real PWM cut, so you can move the hood by hand and so a servo
+ * buzzing against a stop can be killed from the gamepad instead of by
+ * power-cycling the robot. When you do arm it, it comes up in the middle of the
+ * travel band rather than at {@code DEFAULT_POSITION}, which is defined as
+ * {@code MIN_POSITION}: a hood parked exactly on the bottom clamp ignores every
+ * downward nudge and reads as broken.
  */
 public class BallPathShooterTest extends OpMode {
 
@@ -114,12 +123,22 @@ public class BallPathShooterTest extends OpMode {
 
         battery = hardwareMap.voltageSensor.iterator().next();
 
-        // Start from where initHood() left the servo rather than jumping.
-        HoodTuning.TEST_POSITION = Constants.Hood.DEFAULT_POSITION;
+        // Hood starts LIMP. Nothing energizes it until you press Y, so you can
+        // move it by hand first and see where the linkage actually reaches.
+        hood.setPwmEnabled(false);
+
+        // When you do arm it, come up in the MIDDLE of the travel band, not at
+        // DEFAULT_POSITION. DEFAULT_POSITION is defined as MIN_POSITION, so a
+        // hood parked there sits exactly on the bottom clamp: every downward
+        // nudge clips straight back to the same number and the servo never
+        // moves, which reads as a dead hood. From the midpoint both directions
+        // work and you are as far as possible from either stop.
+        HoodTuning.TEST_POSITION = (HoodTuning.MIN_POSITION + HoodTuning.MAX_POSITION) / 2.0;
         hood.setPosition(HoodTuning.TEST_POSITION);
 
         telemetry.addLine("Ball path + shooter together. GUARD ON.");
         telemetry.addLine("Stopper and turret are NOT powered in this test.");
+        telemetry.addLine("Hood is LIMP until you press Y — move it by hand first.");
         telemetry.addLine("A = flywheel, RB = intake, LB = indexer feed.");
         telemetry.update();
     }
@@ -169,7 +188,13 @@ public class BallPathShooterTest extends OpMode {
         }
 
         // --- Hood: manual only. There is no camera in this test, so nothing to
-        // auto-range off. Same X / B / Y presets as test 3b. ---
+        // auto-range off. Y is the power cut: it goes limp on the spot, which is
+        // what you hit the moment the servo starts buzzing. Nudges still track
+        // while it is off, so you can line a position up before energizing. ---
+        if (gamepad1.yWasPressed()) {
+            hood.setPwmEnabled(!hood.isPwmEnabled());
+        }
+
         double nudge = 0;
         if (gamepad1.dpadRightWasPressed()) {
             nudge = 0.01;
@@ -192,9 +217,6 @@ public class BallPathShooterTest extends OpMode {
         }
         if (gamepad1.bWasPressed()) {
             hood.setFarPreset();
-        }
-        if (gamepad1.yWasPressed()) {
-            hood.stop();
         }
 
         intake.periodic();
@@ -247,12 +269,19 @@ public class BallPathShooterTest extends OpMode {
         telemetry.addLine();
         telemetry.addLine("--- hood (manual; no camera in this test) ---");
         boolean clamped = Math.abs(hood.getTargetPosition() - hood.getCommandedPosition()) > 1e-6;
+        telemetry.addData("Power", hood.isPwmEnabled()
+                ? "LIVE — Y cuts it (do that if it buzzes)"
+                : "LIMP — move it by hand. Y energizes it.");
         telemetry.addData("Commanded", "%.3f%s", hood.getCommandedPosition(),
                 clamped ? String.format("  (CLAMPED — asked for %.3f)", hood.getTargetPosition()) : "");
         telemetry.addData("Safe band", "%.3f .. %.3f   dpad L/R +/-0.01, U/D +/-0.05",
                 HoodTuning.MIN_POSITION, HoodTuning.MAX_POSITION);
-        telemetry.addData("Presets", "near %.3f (X)   far %.3f (B)   stow %.3f (Y)",
-                HoodTuning.NEAR_PRESET, HoodTuning.FAR_PRESET, Constants.Hood.DEFAULT_POSITION);
+        telemetry.addData("Presets", "near %.3f (X)   far %.3f (B)",
+                HoodTuning.NEAR_PRESET, HoodTuning.FAR_PRESET);
+        if (clamped) {
+            telemetry.addLine("   Sitting on a clamp — nudges this way do nothing.");
+            telemetry.addLine("   Widen the band in test 3b, don't force it here.");
+        }
 
         telemetry.addLine();
         telemetry.addLine("--- everything at once ---");
@@ -293,7 +322,10 @@ public class BallPathShooterTest extends OpMode {
         intake.setState(Intake.State.IDLE);
         indexer.setState(Indexer.State.IDLE);
         flywheel.stop();
-        hood.stop();
+        // Leave the hood limp rather than stowing it. Stow is DEFAULT_POSITION,
+        // and if that is the position that stalls the servo, driving to it on
+        // the way out re-creates the fault every time you end the test.
+        hood.setPwmEnabled(false);
 
         intake.periodic();
         indexer.periodic();
