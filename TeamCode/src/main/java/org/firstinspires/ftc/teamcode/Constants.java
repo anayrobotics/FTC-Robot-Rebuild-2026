@@ -20,6 +20,15 @@ public class Constants {
 
         public static final DcMotor.ZeroPowerBehavior ZERO_POWER_BEHAVIOR = DcMotor.ZeroPowerBehavior.BRAKE;
 
+        // Strafe direction. On a mecanum, forward/back and turning don't care
+        // which way the rollers face, but STRAFING reverses if the wheel set is
+        // mirrored — rollers forming an O when viewed from above instead of an
+        // X, or the left and right pairs swapped. That's a wheel problem, not a
+        // motor problem, which is why it's fixed here in one place instead of by
+        // flipping motor directions (flipping a motor would break driving and
+        // turning too). Set false if you re-install the wheels in the X pattern.
+        public static final boolean INVERT_STRAFE = true;
+
         //stick input deadzone
         public static final double DEADZONE = 0.05;
     }

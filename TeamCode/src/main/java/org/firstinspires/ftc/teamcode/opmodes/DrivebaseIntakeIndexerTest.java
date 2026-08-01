@@ -27,7 +27,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Intake;
  * <ul>
  *   <li><b>Left stick</b> — translate (field-relative when field-centric is on).</li>
  *   <li><b>Right stick X</b> — rotate.</li>
- *   <li><b>Options</b> — re-zero field-forward heading. Point the robot
+ *   <li><b>Y</b> — re-zero field-forward heading. Point the robot
  *       downfield and press at the start so field-centric forward matches the
  *       field.</li>
  *   <li><b>Back</b> — toggle field-centric / robot-centric.</li>
@@ -67,7 +67,7 @@ public class DrivebaseIntakeIndexerTest extends OpMode {
 
         telemetry.addLine("Drivebase + intake + indexer test ready (navX heading).");
         telemetry.addLine("Single driver, gamepad1:");
-        telemetry.addLine("  left stick drive, right stick X turn, Back toggle centric, Options zero heading.");
+        telemetry.addLine("  left stick drive, right stick X turn, Back toggle centric, Y zero heading.");
         telemetry.addLine("  RB/LB/A intake in/out/idle, dpad up/down/B indexer feed/reverse/idle.");
         telemetry.update();
     }
