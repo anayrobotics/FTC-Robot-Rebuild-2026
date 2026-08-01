@@ -24,5 +24,5 @@ public class FlywheelTuning {
     public static double kF = Constants.Flywheel.kF;
 
     // Setpoint the flywheel tuning OpMode spins to while you tune the gains.
-    public static double TEST_RPM = Constants.Flywheel.SHOOT_RPM;
+    public static double TEST_RPM = 3000;
 }

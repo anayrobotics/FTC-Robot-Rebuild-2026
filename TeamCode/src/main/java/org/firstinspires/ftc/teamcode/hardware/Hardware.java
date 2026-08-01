@@ -92,7 +92,7 @@ public class Hardware {
         backRight = hw.get(DcMotorEx.class, Constants.Drive.BACK_RIGHT);
 
         frontLeft.setDirection(Constants.Drive.LEFT_DIRECTION);
-        backLeft.setDirection(Constants.Drive.LEFT_DIRECTION);
+        backLeft.setDirection(Constants.Drive.RIGHT_DIRECTION);
         frontRight.setDirection(Constants.Drive.RIGHT_DIRECTION);
         backRight.setDirection(Constants.Drive.RIGHT_DIRECTION);
 

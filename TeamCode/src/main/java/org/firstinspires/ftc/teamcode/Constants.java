@@ -16,7 +16,7 @@ public class Constants {
 
         // All four drive motors currently use the same positive direction.
         public static final DcMotor.Direction LEFT_DIRECTION = DcMotor.Direction.FORWARD;
-        public static final DcMotor.Direction RIGHT_DIRECTION = DcMotor.Direction.FORWARD;
+        public static final DcMotor.Direction RIGHT_DIRECTION = DcMotor.Direction.REVERSE;
 
         public static final DcMotor.ZeroPowerBehavior ZERO_POWER_BEHAVIOR = DcMotor.ZeroPowerBehavior.BRAKE;
 
