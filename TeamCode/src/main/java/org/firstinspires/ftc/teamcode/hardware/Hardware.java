@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode.hardware;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.Servo;
@@ -40,16 +41,17 @@ public class Hardware {
     // navX2-Micro: the robot's heading source for both drive and PedroPathing.
     public final NavXIMU navxImu = new NavXIMU();
 
+
     public void init(HardwareMap hw){
         frontLeft = hw.get(DcMotorEx.class, Constants.Drive.FRONT_LEFT);
         frontRight = hw.get(DcMotorEx.class, Constants.Drive.FRONT_RIGHT);
         backLeft = hw.get(DcMotorEx.class, Constants.Drive.BACK_LEFT);
         backRight = hw.get(DcMotorEx.class, Constants.Drive.BACK_RIGHT);
 
-        frontLeft.setDirection(Constants.Drive.LEFT_DIRECTION);
-        backLeft.setDirection(Constants.Drive.LEFT_DIRECTION);
-        frontRight.setDirection(Constants.Drive.RIGHT_DIRECTION);
-        backRight.setDirection(Constants.Drive.RIGHT_DIRECTION);
+        frontLeft.setDirection(DcMotorEx.Direction.REVERSE);
+        backLeft.setDirection(DcMotorEx.Direction.REVERSE);
+        frontRight.setDirection(DcMotorEx.Direction.FORWARD);
+        backRight.setDirection(DcMotorSimple.Direction.FORWARD);
 
         intake = hw.get(DcMotorEx.class, Constants.Intake.MOTOR);
         intake.setDirection(Constants.Intake.DIRECTION);
@@ -97,6 +99,7 @@ public class Hardware {
         // "forward at init" is heading 0, matching the old hub-IMU behavior.
         navxImu.initialize(hw, Constants.Imu.NAVX, hubOrientation);
         navxImu.resetYaw();
+
     }
 
     /**
@@ -114,7 +117,7 @@ public class Hardware {
         backRight = hw.get(DcMotorEx.class, Constants.Drive.BACK_RIGHT);
 
         frontLeft.setDirection(Constants.Drive.LEFT_DIRECTION);
-        backLeft.setDirection(Constants.Drive.LEFT_DIRECTION);
+        backLeft.setDirection(Constants.Drive.RIGHT_DIRECTION);
         frontRight.setDirection(Constants.Drive.RIGHT_DIRECTION);
         backRight.setDirection(Constants.Drive.RIGHT_DIRECTION);
 

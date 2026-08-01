@@ -78,7 +78,7 @@ public class DrivebaseIntakeIndexerTest extends OpMode {
         if (gamepad1.backWasPressed()) {
             fieldCentric = !fieldCentric;
         }
-        if (gamepad1.options) {
+        if (gamepad1.yWasPressed()) {
             drivebase.resetHeading();
         }
         drivebase.driveWithGamepad(gamepad1, fieldCentric);
