@@ -15,7 +15,12 @@ public class Indexer implements Subsystem {
     public enum State {
         IDLE,
         FEEDING,
-        REVERSING
+        REVERSING,
+        // Bring-up only: run one motor at a time to confirm each is wired to
+        // the name it has in the config and spins the way FEEDING needs. Match
+        // TeleOp never uses these — feeding always drives both together.
+        FRONT_ONLY,
+        BACK_ONLY
     }
 
     private final DcMotorEx frontMotor;
@@ -43,6 +48,14 @@ public class Indexer implements Subsystem {
                 break;
             case REVERSING:
                 setPower(-Constants.Indexer.SPEED);
+                break;
+            case FRONT_ONLY:
+                frontMotor.setPower(Constants.Indexer.SPEED);
+                backMotor.setPower(0);
+                break;
+            case BACK_ONLY:
+                frontMotor.setPower(0);
+                backMotor.setPower(Constants.Indexer.SPEED);
                 break;
             case IDLE:
             default:
