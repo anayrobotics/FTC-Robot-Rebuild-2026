@@ -50,9 +50,9 @@ public class IntakeIndexerTest extends OpMode {
     @Override
     public void loop() {
         if (gamepad1.right_bumper) {
-            intake.setState(Intake.State.INTAKING);
-        } else if (gamepad1.right_trigger > TRIGGER_THRESHOLD) {
             intake.setState(Intake.State.OUTTAKING);
+        } else if (gamepad1.right_trigger > TRIGGER_THRESHOLD) {
+            intake.setState(Intake.State.INTAKING);
         } else {
             intake.setState(Intake.State.IDLE);
         }

@@ -41,7 +41,7 @@ public class Constants {
 
     public static final class Indexer {
         public static final String MOTOR = "indexer";
-        public static final DcMotor.Direction DIRECTION = DcMotor.Direction.FORWARD;
+        public static final DcMotor.Direction DIRECTION = DcMotor.Direction.REVERSE;
         public static final double SPEED = 1.0;
     }
 
