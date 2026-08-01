@@ -31,19 +31,8 @@ public class Constants {
     }
 
     public static final class Indexer {
-        // Two motors move the ball through the indexer and they always run
-        // together as one unit — the subsystem commands both with the same
-        // signed power, so a ball is never driven by one stage and fought by
-        // the other.
-        public static final String FRONT_MOTOR = "frontIndexer";
-        public static final String BACK_MOTOR = "backIndexer";
-
-        // Set so that a POSITIVE power on each motor feeds a ball toward the
-        // shooter. If the two stages fight each other (or one runs backwards),
-        // flip that motor's direction here rather than negating its power.
-        public static final DcMotor.Direction FRONT_DIRECTION = DcMotor.Direction.FORWARD;
-        public static final DcMotor.Direction BACK_DIRECTION = DcMotor.Direction.FORWARD;
-
+        public static final String MOTOR = "indexer";
+        public static final DcMotor.Direction DIRECTION = DcMotor.Direction.FORWARD;
         public static final double SPEED = 1.0;
     }
 

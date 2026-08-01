@@ -19,10 +19,7 @@ public class Hardware {
     public DcMotorEx backRight;
 
     public DcMotorEx intake;
-
-    // The indexer is driven by two motors that always run together.
-    public DcMotorEx frontIndexer;
-    public DcMotorEx backIndexer;
+    public DcMotorEx indexer;
 
     public DcMotorEx flywheelLeft;
     public DcMotorEx flywheelRight;
@@ -57,11 +54,8 @@ public class Hardware {
         intake = hw.get(DcMotorEx.class, Constants.Intake.MOTOR);
         intake.setDirection(Constants.Intake.DIRECTION);
 
-        frontIndexer = hw.get(DcMotorEx.class, Constants.Indexer.FRONT_MOTOR);
-        frontIndexer.setDirection(Constants.Indexer.FRONT_DIRECTION);
-
-        backIndexer = hw.get(DcMotorEx.class, Constants.Indexer.BACK_MOTOR);
-        backIndexer.setDirection(Constants.Indexer.BACK_DIRECTION);
+        indexer = hw.get(DcMotorEx.class, Constants.Indexer.MOTOR);
+        indexer.setDirection(Constants.Indexer.DIRECTION);
 
         flywheelLeft = hw.get(DcMotorEx.class, Constants.Flywheel.LEFT_MOTOR);
         flywheelRight = hw.get(DcMotorEx.class, Constants.Flywheel.RIGHT_MOTOR);
@@ -131,11 +125,8 @@ public class Hardware {
         intake = hw.get(DcMotorEx.class, Constants.Intake.MOTOR);
         intake.setDirection(Constants.Intake.DIRECTION);
 
-        frontIndexer = hw.get(DcMotorEx.class, Constants.Indexer.FRONT_MOTOR);
-        frontIndexer.setDirection(Constants.Indexer.FRONT_DIRECTION);
-
-        backIndexer = hw.get(DcMotorEx.class, Constants.Indexer.BACK_MOTOR);
-        backIndexer.setDirection(Constants.Indexer.BACK_DIRECTION);
+        indexer = hw.get(DcMotorEx.class, Constants.Indexer.MOTOR);
+        indexer.setDirection(Constants.Indexer.DIRECTION);
 
         // The navX ignores hubOrientation (it's not a REV hub IMU), but its
         // initialize() signature takes one, so pass the configured mounting.

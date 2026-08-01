@@ -33,23 +33,14 @@ import org.firstinspires.ftc.teamcode.subsystems.Intake;
  *   <li><b>Back</b> — toggle field-centric / robot-centric.</li>
  *   <li><b>Right bumper</b> — intake IN, <b>Left bumper</b> — intake OUT,
  *       <b>A</b> — intake IDLE.</li>
- *   <li><b>Dpad up</b> — indexer FEED (both motors), <b>Dpad down</b> — indexer
- *       REVERSE (both motors), <b>B</b> — indexer IDLE.</li>
- *   <li><b>X</b> — run the FRONT indexer motor alone, <b>Y</b> — run the BACK
- *       indexer motor alone. Bring-up checks; press B to stop.</li>
+ *   <li><b>Dpad up</b> — indexer FEED, <b>Dpad down</b> — indexer REVERSE,
+ *       <b>B</b> — indexer IDLE.</li>
  * </ul>
  *
  * <p>FIELD-CENTRIC CHECK: with field-centric on, hold the left stick forward
  * and rotate the robot in place — it should keep driving the same direction
  * across the floor. If forward drives the wrong way as you rotate, flip {@link
  * org.firstinspires.ftc.teamcode.localization.NavXIMU#INVERT}.
- *
- * <p>INDEXER CHECK: the indexer has two motors that must move a ball the SAME
- * way. Run X and then Y and watch each motor on its own — both should push a
- * ball toward the shooter. If one runs backwards, flip that motor's direction
- * ({@code FRONT_DIRECTION} / {@code BACK_DIRECTION} in {@link
- * org.firstinspires.ftc.teamcode.Constants.Indexer}) rather than negating its
- * power, so FEEDING stays correct. Only once both agree should you use dpad up.
  */
 @TeleOp(name = "Drivebase + Intake + Indexer Test", group = "Test")
 public class DrivebaseIntakeIndexerTest extends OpMode {
@@ -78,7 +69,6 @@ public class DrivebaseIntakeIndexerTest extends OpMode {
         telemetry.addLine("Single driver, gamepad1:");
         telemetry.addLine("  left stick drive, right stick X turn, Back toggle centric, Options zero heading.");
         telemetry.addLine("  RB/LB/A intake in/out/idle, dpad up/down/B indexer feed/reverse/idle.");
-        telemetry.addLine("  X/Y run front/back indexer motor alone (direction check).");
         telemetry.update();
     }
 
@@ -104,7 +94,7 @@ public class DrivebaseIntakeIndexerTest extends OpMode {
             scheduler.schedule(new SetIntakeStateCommand(intake, Intake.State.IDLE));
         }
 
-        // --- Indexer: both motors together ---
+        // --- Indexer ---
         if (gamepad1.dpadUpWasPressed()) {
             scheduler.schedule(new SetIndexerStateCommand(indexer, Indexer.State.FEEDING));
         }
@@ -115,14 +105,6 @@ public class DrivebaseIntakeIndexerTest extends OpMode {
             scheduler.schedule(new SetIndexerStateCommand(indexer, Indexer.State.IDLE));
         }
 
-        // --- Indexer: one motor at a time, to check wiring and direction ---
-        if (gamepad1.xWasPressed()) {
-            scheduler.schedule(new SetIndexerStateCommand(indexer, Indexer.State.FRONT_ONLY));
-        }
-        if (gamepad1.yWasPressed()) {
-            scheduler.schedule(new SetIndexerStateCommand(indexer, Indexer.State.BACK_ONLY));
-        }
-
         // Runs each subsystem's periodic() and services scheduled commands.
         scheduler.run();
 
@@ -130,10 +112,6 @@ public class DrivebaseIntakeIndexerTest extends OpMode {
         telemetry.addData("Heading (deg)", "%.1f", Math.toDegrees(drivebase.getHeading()));
         telemetry.addData("Intake", intake.getState());
         telemetry.addData("Indexer", indexer.getState());
-        // Both motor powers, so you can see the two stages agree when FEEDING
-        // and see exactly which one is moving during the X / Y checks.
-        telemetry.addData("  front power", "%.2f", hardware.frontIndexer.getPower());
-        telemetry.addData("  back power", "%.2f", hardware.backIndexer.getPower());
         telemetry.update();
     }
 
