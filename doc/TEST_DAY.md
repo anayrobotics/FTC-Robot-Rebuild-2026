@@ -43,7 +43,7 @@ test turns twenty minutes of "why won't anything run" into one line.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| A name shows `??` | Name mismatch or wrong device type in the config | Names are **case-sensitive**. `frontleftDrive` ≠ `frontLeftDrive`. Check the type too — the turret is a **CRServo**, not a Servo; `turretEncoder` is an **Analog Input**, not a motor port |
+| A name shows `??` | Name mismatch or wrong device type in the config | Names are **case-sensitive**. `frontleftDrive` ≠ `frontLeftDrive`. Check the type too — `turret` is a plain **Servo**, same as the hood and stopper |
 | `navx` missing | Not configured, or on the wrong I2C bus | Add as `NavX Micro Navigation Sensor` on the I2C port it's actually plugged into |
 | `limelight` missing | Not configured | Add as `Limelight3A` on USB. It also needs its own power |
 
@@ -272,51 +272,61 @@ What to prove:
 
 ## 4 — Turret
 
-### 4a — Encoder + Manual + Park (no camera)
+### 4a — Geometry + Manual + Park (no camera)
 
-**Run:** `4 - Turret → 4a Encoder + Manual + Park` · **start with the turret near centre.**
-dpad left/right nudge · **A** park · **B** stop · **X** capture ORIGIN_DEG ·
-**Y** flip INVERT_RETURN · bumpers change nudge power.
-Readouts are live during **INIT**, so you can measure before anything can move.
+**Run:** `4 - Turret → 4a Geometry + Manual + Park` · **start with the turret
+pointed straight ahead.**
+dpad left/right jog · **X** set origin here · **A** command +90° · **B** park ·
+**Y** stop · bumpers change `SERVO_RANGE_DEG`.
+Nothing is commanded until you press **PLAY** — the turret is limp during INIT so
+you can back-drive it by hand.
 
-This is the one subsystem that can destroy itself. It's a continuous-rotation
-servo with wires running to it and no mechanical idea of where it is. Everything
-stopping it twisting its own loom off is software, and all of that software rests
-on one analog voltage.
+The turret is a **positional servo with no feedback of any kind.** It can't spin
+freely and there's no winding to unwrap, so it can't twist its own loom off — but
+it also can't tell you where it is. The code's entire idea of where the turret
+points rests on two measured numbers. This test is how you measure them.
+
+> **Start it straight ahead, every time.** Nothing surveys the turret at init.
+> The code assumes it begins at the origin, so if it doesn't, every angle on
+> screen — and every aim in 5b — is offset by however far out it was.
 
 **Four things, in order:**
 
-**1. Is the feedback wire alive?** Nudge and watch the voltage. It must sweep
-smoothly and span most of 0–3.3 V over a full turn.
+**1. Where is straight ahead?** Jog until the turret points dead down the robot's
+centreline, press **X**. The angle readout zeroes. Copy the reported
+`ORIGIN_POSITION` into `Constants.Turret.ORIGIN_POSITION`.
 
-> If it reads 0 or never moves, **every safety in the turret is inert**. The
-> continuous angle never changes, travel stays at 0, the limit never trips, and
-> the turret will happily wind until something tears. The test says
-> `FEEDBACK WIRE LOOKS DEAD`. Stop and fix the wire — do not continue to test 5.
+**2. Is `SERVO_RANGE_DEG` right?** From the origin, press **A** to command exactly
++90°. **Measure what the turret actually swung with a protractor.** Moved 60 when
+asked for 90? Scale `SERVO_RANGE_DEG` by 60/90 (bumpers) and repeat until
+commanded and measured agree.
 
-**2. Where is straight ahead?** Push the turret to dead centre by hand, press **X**.
-Copy the captured value into `Constants.Turret.ORIGIN_DEG`.
+> Get this one right. It's the single conversion every angle in the turret goes
+> through, so if it's off by a factor, the turret under- or over-shoots by that
+> same factor on **every** shot — and no amount of kP tuning in 5b will fix it,
+> because nothing in the aim loop is wrong.
 
-**3. Does parking go the right way?** Nudge well off centre, press **A**. It must
-drive **back toward** the origin and stop. If it accelerates away and pins itself,
-press **Y** and retry.
+**3. Do the travel limits hold?** Jog one way and keep going. The turret must stop
+at `MAX_ANGLE_DEG` and refuse to go further that way while still jogging back.
+Then check them against the real mechanics: the servo must reach both software
+limits **without touching a hard stop**. If it strains, tighten the limits. They
+are the only thing protecting the linkage.
 
-> Get this right here. The same sign tells the travel limit which way the turret
-> is winding, so a wrong `INVERT_RETURN` silently disables the limit in the
-> direction that matters.
+**4. Is `MAX_SLEW_DEG_PER_S` honest?** Park from a long way out with **B**. The
+turret must arrive at centre at the same moment the angle readout reaches 0. If
+the readout gets there first while the turret is still visibly swinging, the cap
+is faster than the servo really is — lower it.
 
-**4. Does the travel limit hold?** Nudge past ±180°. The nudge must **stop working
-in that direction** while still working back the other way.
+> Everything downstream treats the commanded angle as where the turret *is*. That
+> is only true while the servo can keep up, which is exactly what this cap buys.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Voltage flat / zero | Axon 4th wire not connected | Fix it. Nothing below works without it |
-| Voltage jumps erratically | Bad ground or a long unshielded run | Reseat; keep it away from motor leads |
-| Park runs away from the origin | `INVERT_RETURN` wrong | Press **Y** |
-| Park stops just short and sits | Below the stiction floor | Raise `MIN_AIM_POWER` or widen `RETURN_TOLERANCE_DEG` |
-| `GAVE UP — turret stopped moving` | Blocked, or too little power for the load | Find the snag. Press **A** to retry. **This is a safety, not a bug** — it cuts power rather than grinding the servo |
-| Travel reads nonsense at startup | Turret was wound when the robot powered on | Centre it by hand and re-init. The code can't see winding that happened while it was off |
-| Turret creeps with the gains zeroed | *(fixed)* the stiction floor used to take its sign from a `+0.0` output | — |
+| Snaps hard the moment you press PLAY | Turret wasn't straight ahead at init | Centre it by hand, re-init. Nothing surveys it |
+| Commanded +90, measured something else | `SERVO_RANGE_DEG` wrong | Scale it by measured/90 with the bumpers |
+| Servo buzzing at the end of travel | Software limits are wider than the mechanics | Tighten `MIN_ANGLE_DEG` / `MAX_ANGLE_DEG`. **Not** optional |
+| Angle readout arrives before the turret does | `MAX_SLEW_DEG_PER_S` faster than the servo | Lower it until they land together |
+| Jog walks the turret further every time you press **X** | *(fixed)* moving the origin used to leave the angle measured against the old one | — |
 
 ---
 
@@ -362,31 +372,32 @@ frame, which separates the three failures cleanly.
 **Run:** `5 - Vision + Auto-Aim → 5b Turret Auto-Aim` · **hand on STOP.**
 **X** blue · **B** red · **Y** flip INVERT_OUTPUT · **A** park · bumpers nudge kP.
 
-Only run this once 4a and 5a both pass.
+Only run this once 4a and 5a both pass. The aim loop commands **angles**, and an
+angle doesn't mean anything until 4a has established what one is worth.
 
 **Get the direction right on the first press.** Show the tag off to one side — the
 turret must swing **toward** it. If it runs the other way, press **Y** immediately.
 
-> This is a **different flag** from the one in 4a. That one was the servo's
-> gearing; this one is how the camera is mounted. Getting one right tells you
-> nothing about the other.
+> `INVERT_OUTPUT` is purely about how the **camera** is mounted. The servo's own
+> geometry sign is `Constants.Turret.DIRECTION`, settled back in 4a.
 
-**Then tune out the hunting.** Raise kP until it arrives briskly, add kD until it
-stops overshooting, leave kI at 0.
+**Then tune out the hunting.** kP is a slew rate in **degrees per second per
+degree of tx** — at kP = 6, a tag 10° off asks for 60 °/s. Raise it until the
+turret closes briskly, add kD until it stops overshooting, leave kI at 0.
 
-**Then watch the wind.** Carry the tag in a circle around the robot. Travel climbs;
-at the limit it should **unwrap** — swing a full turn the other way to the same
-heading — and come out still pointed at the tag. Confirm it never reads LOCKED
-mid-swing.
+**Then watch the limits.** Carry the tag around the robot and watch the angle
+climb. At `MIN`/`MAX_ANGLE_DEG` the turret must **stop and hold** — it will not
+follow the tag past its own range, and it must never read LOCKED while pinned
+there. That's the shot that needs the robot to turn, and TeleOp says so.
 
 | Symptom | Cause | Fix |
 |---|---|---|
 | Runs away from the tag, hits the limit | `INVERT_OUTPUT` wrong | Press **Y** |
 | Overshoots and oscillates | kP too high | Lower kP, add kD |
-| Buzzes at centre, never settles | `MIN_AIM_POWER` kicks it further than `AIM_TOLERANCE_DEG` is wide, so it can't land in the band | Widen `AIM_TOLERANCE_DEG` or lower `MIN_AIM_POWER`. **Not** a kP problem |
+| Buzzes at centre, never settles | The smallest correction is wider than `AIM_TOLERANCE_DEG`, so it can't land in the band | Widen `AIM_TOLERANCE_DEG`. **Not** a kP problem |
 | Slow and never quite arrives | kP too low, or friction | Raise kP; check the turret turns freely by hand |
-| Unwrap starts and never finishes | Mechanical range is less than a full turn | The turret gives up after 0.75 s of no progress and reports `BLOCKED`. Lower `MAX_TRAVEL_DEG` so it never needs the full swing |
-| Unwraps back and forth repeatedly | *(fixed)* the hysteresis guard used to be cleared mid-swing | — |
+| Smooth but always lagging a moving tag | Already capped at `MAX_SLEW_DEG_PER_S` | Check the cap **before** reaching for kP — more gain does nothing once it saturates |
+| Aims short or long by a constant factor | `SERVO_RANGE_DEG` wrong | Back to 4a step 2. Nothing here can fix it |
 
 ---
 
@@ -477,9 +488,10 @@ you pick, so you can't start aimed at the wrong goal.
 | RPM number implausible | 3a — `TICKS_PER_REV` |
 | Servo buzzing | Past its stop — 2b / 3b. **Y** kills hood power |
 | Hood won't move, or only one way | Sitting on the MIN/MAX clamp — 3b |
-| Turret winds up its wiring | 4a — dead feedback wire |
-| Turret runs away | 4a `INVERT_RETURN` / 5b `INVERT_OUTPUT` |
-| Turret hunts at centre | 5b — `MIN_AIM_POWER` vs `AIM_TOLERANCE_DEG` |
+| Turret aims short or long every time | 4a — `SERVO_RANGE_DEG` |
+| Turret snaps hard on PLAY | 4a — it wasn't straight ahead at init |
+| Turret runs away | 5b — `INVERT_OUTPUT` |
+| Turret hunts at centre | 5b — `AIM_TOLERANCE_DEG` too narrow |
 | "no goal in view" | 5a — pipeline / tag id |
 | Every shot off by the same amount | 5a — camera geometry, **not** the table |
 | Robot spins in drive-to-pose | 6b — heading sign |
@@ -489,26 +501,37 @@ you pick, so you can't start aimed at the wrong goal.
 
 ## What changed for this test day
 
+**The turret is now a positional servo**, not a CRServo. It's told an angle and
+holds it, so:
+
+- The **analog feedback wire is gone** — remove `turretEncoder` from the Robot
+  Configuration, and change `turret` from `CRServo` to `Servo`.
+- **No winding, no unwrap, no stall detection.** A positional servo can't spin
+  freely, so there's nothing to accumulate and nothing to swing back. The travel
+  limits are now a plain clamp (`MIN`/`MAX_ANGLE_DEG`) applied to every command.
+- **Test 4a is a different test.** It used to prove a feedback wire was alive;
+  now it measures `ORIGIN_POSITION` and `SERVO_RANGE_DEG`, which is what the code
+  uses in place of that wire. Re-run it — the old numbers don't carry over.
+- **Aim gains changed units.** kP is now degrees/second per degree of tx (~6),
+  not servo power (~0.02). `MIN_AIM_POWER` and both `INVERT_RETURN`-era knobs are
+  gone; the servo's geometry sign is `Constants.Turret.DIRECTION`.
+- **New failure mode to know about:** nothing surveys the turret at init, so it
+  must start every match pointed straight ahead or the first command snaps it
+  across. The old feedback wire used to make this a non-issue.
+
 New:
 - `RobotTest` — all 12 tests behind one DS entry, each initializing only what it needs.
 - `Hardware.scan()` and per-group `initX()` methods.
 - `VisionTuning` — camera geometry is now live-editable.
-- `TurretTuning` — both INVERT flags, the aim bands, and the unwind settings moved
-  here so they can be flipped at the field instead of needing a rebuild.
+- `TurretTuning` — `INVERT_OUTPUT`, the geometry, the travel limits and the aim
+  bands moved here so they can be dialed in at the field without a rebuild.
 
 Fixed:
-- **Turret unwrap/park could hold full power against an obstruction forever.** No
-  timeout, no stall check. The robot could never shoot again for the rest of the
-  match. Now gives up after 0.75 s of no progress, cuts power, and reports it.
 - **Drive-to-pose heading was sign-inverted** against `Drivebase.drive()` — the
   error grew instead of shrinking and the robot spun on the spot.
-- **The unwrap hysteresis guard was dead code**, cleared mid-swing every time. A
-  goal near the boundary could ping-pong through 360° swings indefinitely.
 - **The fire gate chattered.** A 75 RPM band on a wheel that dips ~200 per ball
   meant the stopper slammed shut and restarted its travel timer between every
   shot. Bursts now arm on the tight band and sustain on wider ones.
-- **The stiction floor took its sign from a `+0.0` output**, so zeroing kP while
-  tuning walked the turret off to its stop.
 - **The PID integral accumulated even with kI = 0**, so typing a gain into Panels
   applied a huge stored value in one frame.
 - Drive run mode is now one constant (`Constants.Drive.RUN_MODE`) you can flip.

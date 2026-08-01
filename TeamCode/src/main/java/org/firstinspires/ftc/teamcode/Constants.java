@@ -15,8 +15,8 @@ public class Constants {
         public static final String BACK_RIGHT = "backRightDrive";
 
         // Right side reversed so positive power drives forward.
-        public static final DcMotor.Direction LEFT_DIRECTION = DcMotor.Direction.REVERSE;
-        public static final DcMotor.Direction RIGHT_DIRECTION = DcMotor.Direction.FORWARD;
+        public static final DcMotor.Direction LEFT_DIRECTION = DcMotor.Direction.FORWARD;
+        public static final DcMotor.Direction RIGHT_DIRECTION = DcMotor.Direction.REVERSE;
 
         public static final DcMotor.ZeroPowerBehavior ZERO_POWER_BEHAVIOR = DcMotor.ZeroPowerBehavior.BRAKE;
 
@@ -31,8 +31,6 @@ public class Constants {
 
         //stick input deadzone
         public static final double DEADZONE = 0.05;
-
-        public static final boolean INVERT_STRAFE = false;
     }
 
     public static final class Intake {
@@ -101,118 +99,122 @@ public class Constants {
     }
 
     public static final class Turret {
-        // Continuous-rotation servo that spins the turret. A CRServo (not a
-        // positional servo) is used so the aim loop can command a rotation
-        // *speed* proportional to how far off target we are.
+        // POSITIONAL servo that rotates the turret. It is commanded to an angle
+        // and holds it — the same kind of device as the hood and stopper below,
+        // just geared to swing the whole shooter.
         //
-        // REAL-LIFE WARNING: a CRServo has no position feedback and no built-in
-        // travel limit, so nothing here stops the turret rotating past its
-        // mechanical range and twisting the wiring. Add a hard mechanical stop
-        // or a slip ring, and never leave it in AUTO_AIM without a valid target.
+        // The turret therefore has no idea where it is beyond what we last told
+        // it, and that is fine, because a positional servo can only ever be
+        // where it was told. There is no feedback wire, no winding to unwrap and
+        // no travel accumulator: the command IS the position. What replaces all
+        // of that is MIN_ANGLE_DEG / MAX_ANGLE_DEG below, which every command is
+        // clamped to.
+        //
+        // The one thing this costs: nothing surveys the turret at startup. If it
+        // is physically off-centre when the OpMode begins, the first command
+        // snaps it across. START EVERY MATCH WITH THE TURRET POINTED STRAIGHT
+        // AHEAD.
         public static final String SERVO = "turret";
-        public static final DcMotorSimple.Direction DIRECTION = DcMotorSimple.Direction.FORWARD;
 
-        // The Axon MAX+ MK2's fourth wire: an ABSOLUTE analog position feedback
-        // of the servo's output shaft, 0 V at 0 degrees rising linearly to the
-        // channel's full scale (3.3 V) at 360. Wire it to an analog input on the
-        // hub and add it to the robot config as an "Analog Input" with this name.
+        // Which way the turret swings for an increasing servo position. Flip to
+        // REVERSE if positive angles below come out on the wrong side; that
+        // keeps the geometry sign here and leaves INVERT_OUTPUT to be purely
+        // about the camera.
+        public static final com.qualcomm.robotcore.hardware.Servo.Direction DIRECTION =
+                com.qualcomm.robotcore.hardware.Servo.Direction.FORWARD;
+
+        // MEASURE THIS. Degrees of TURRET rotation across the servo's full
+        // [0, 1] travel — the servo's programmed range, divided by any gear
+        // reduction between it and the turret.
         //
-        // It reads true angle with no zeroing and no drift, which is what makes
-        // RETURN_TO_ORIGIN possible on a servo that otherwise has no idea where
-        // it is. Note it wraps at 360 -> 0, so all the maths below compares
-        // angles as a shortest-path difference, never as raw subtraction.
-        public static final String ENCODER = "turretEncoder";
+        // Everything in this class is expressed in degrees and converted through
+        // this one number, so if it is wrong every angle is wrong by the same
+        // factor: the turret will consistently under- or over-shoot and no
+        // amount of gain tuning will fix it. Run test 4a, command a known angle,
+        // and measure what the turret actually did with a protractor.
+        public static final double SERVO_RANGE_DEG = 355.0;
 
-        // Raw feedback angle (degrees, straight off the wire) when the turret
-        // points straight ahead. MEASURE THIS: run "Turret PID Tuning", push the
-        // turret to dead centre by hand, and copy the reported raw angle here.
-        public static final double ORIGIN_DEG = 180.0;
+        // MEASURE THIS TOO. Servo position, in [0, 1], at which the turret
+        // points straight ahead. Centred by default so the turret has equal
+        // travel either way. Run test 4a, jog until it is dead centre, and copy
+        // the reported position here.
+        public static final double ORIGIN_POSITION = 0.5;
 
-        // Return-to-origin loop. Proportional only — it's a park move, not a
-        // tracking one, so there's nothing to damp and no steady-state error
-        // worth integrating out.
-        public static final double RETURN_kP = 0.010;
-
-        // Cap the park speed. Lower than MAX_AIM_POWER because this runs
-        // unattended while the driver is doing something else.
-        public static final double MAX_RETURN_POWER = 0.35;
-
-        // Inside this many degrees of ORIGIN_DEG, we're home and stop.
-        public static final double RETURN_TOLERANCE_DEG = 2.0;
-
-        // How far either side of the origin the turret may wind before it has to
-        // unwrap. 180 either way = 360 of total travel, i.e. never more than one
-        // full turn of the wiring.
+        // Software travel limits, in degrees off the origin. Every command is
+        // clamped to these, in every state, so a bad gain or a goal behind the
+        // robot can never drive the turret into its own hard stop.
         //
-        // Aiming can always reach ANY heading within this: a heading is only
-        // ever 180 from the origin the short way round. What the limit costs is
-        // the FREEDOM to get there the long way round, which is what would wind
-        // the wires up over a match.
-        public static final double MAX_TRAVEL_DEG = 180.0;
+        // TIGHTEN THESE to the real mechanical range once you have found it —
+        // they start deliberately narrower than SERVO_RANGE_DEG allows.
+        public static final double MIN_ANGLE_DEG = -150.0;
+        public static final double MAX_ANGLE_DEG = 150.0;
 
-        // Once at the limit, the turret unwraps by swinging a full turn the
-        // other way to the SAME physical heading (+185 becomes -175). Faster
-        // than the park loop because the turret is off the goal for the whole
-        // move and can't shoot until it lands.
-        public static final double MAX_UNWIND_POWER = 0.6;
-
-        // Travel has to come back this far inside the limit before another
-        // unwrap may trigger. Without it, a goal sitting exactly on the boundary
-        // would unwrap, land on the opposite boundary, and unwrap straight back
-        // -- spinning in circles instead of shooting. Guarded, the turret simply
-        // holds at the limit and refuses to cross.
-        public static final double UNWIND_HYSTERESIS_DEG = 10.0;
-
-        // If the turret runs AWAY from the origin when parking (error grows, it
-        // takes the long way round), flip this. Separate from INVERT_OUTPUT:
-        // that one is the camera's tx-vs-power sign, this is the feedback
-        // wire's angle-vs-power sign, and they're independent facts about how
-        // the servo and camera are each mounted.
-        public static final boolean INVERT_RETURN = false;
-
-        // Aim loop runs on the Limelight's horizontal error (tx, in degrees) and
-        // drives it to zero. Output is servo power. No feedforward (kF) because
-        // the setpoint is tx = 0, and no integral (kI) because a turret that can
-        // briefly lose its target would wind the integral up and overshoot.
-        public static final double kP = 0.020;
+        // Aim loop. Input is the Limelight's horizontal error (tx, degrees);
+        // output is a turret SLEW RATE in degrees per second, which the subsystem
+        // integrates into the position it commands.
+        //
+        // Rate rather than position on purpose. Commanding "current angle + tx"
+        // outright looks like the obvious move for a positional servo and is a
+        // trap: the servo needs a good fraction of a second to get there, tx
+        // keeps reporting the old error the whole way, and the loop piles
+        // correction on correction until it slams past centre. Asking for a rate
+        // the servo can actually keep up with makes the commanded angle track
+        // the real one, which is the whole basis for trusting it as position.
+        //
+        // kI stays 0 — a turret that briefly loses sight of the tag would wind
+        // the integral up while blind and then slam. kF stays 0 because the
+        // setpoint is tx = 0.
+        public static final double kP = 6.0;
         public static final double kI = 0.0;
-        public static final double kD = 0.0015;
+        public static final double kD = 0.10;
         public static final double kF = 0.0;
 
-        // If the turret drives AWAY from the target (runs to a hard stop or
-        // oscillates and grows), flip this. The correct sign depends on which
-        // way the servo is geared to the turret and how the camera is mounted.
+        // If the turret swings AWAY from the target, flip this. Purely about how
+        // the camera is mounted relative to the turret's rotation — the servo's
+        // own geometry sign lives in DIRECTION above.
         public static final boolean INVERT_OUTPUT = false;
 
-        // Inside this many degrees we consider ourselves aimed and stop moving,
-        // which kills the servo jitter you'd otherwise get right at center.
+        // MEASURE THIS. Ceiling on the commanded slew, degrees per second, and
+        // the most important number here after SERVO_RANGE_DEG.
+        //
+        // It must be at or BELOW the servo's real loaded speed. Set it higher
+        // and the command runs away from where the turret actually is, which
+        // breaks the assumption everything else rests on: isAtOrigin() reports
+        // home while it is still swinging, and the limits stop meaning anything.
+        // Take the servo's no-load spec (deg/sec), scale it by the gearing, and
+        // knock 30% off for load.
+        public static final double MAX_SLEW_DEG_PER_S = 180.0;
+
+        // Park speed for RETURN_TO_ORIGIN. Slower than the aim: this one runs
+        // unattended while the driver is busy somewhere else.
+        public static final double MAX_RETURN_DEG_PER_S = 120.0;
+
+        // Inside this many degrees of the origin, we count as parked.
+        public static final double RETURN_TOLERANCE_DEG = 2.0;
+
+        // Inside this many degrees of the goal we consider ourselves aimed and
+        // stop commanding, which kills the hunting you'd otherwise get as the
+        // loop chases sub-pixel noise around centre.
         public static final double AIM_TOLERANCE_DEG = 1.0;
 
         // The band that KEEPS a burst feeding once it has started, the same idea
-        // as Flywheel.RPM_KEEP_TOLERANCE. Because the turret cuts its servo the
-        // instant it's inside AIM_TOLERANCE_DEG, the aim drifts back out, the
-        // servo nudges, and the lock flag flickers on and off around centre even
-        // with a stationary robot. That flicker is not a real loss of aim, and
-        // stopping the feed for it costs a shot every time.
+        // as Flywheel.RPM_KEEP_TOLERANCE. Because the turret stops commanding
+        // the instant it's inside AIM_TOLERANCE_DEG, the aim drifts back out,
+        // the turret nudges, and the lock flag flickers on and off around centre
+        // even with a stationary robot. That flicker is not a real loss of aim,
+        // and stopping the feed for it costs a shot every time.
         public static final double KEEP_AIM_TOLERANCE_DEG = 3.0;
 
-        // Cap the aim speed so the turret slews smoothly instead of slamming.
-        public static final double MAX_AIM_POWER = 0.6;
-
-        // A CRServo below this power usually can't overcome its own stiction, so
-        // when we do need to move we floor the command to at least this much.
-        public static final double MIN_AIM_POWER = 0.05;
-
-        // Speed of a manual dpad nudge in TeleOp. Deliberately slower than
-        // MAX_AIM_POWER: this is the driver hunting for a target by eye, with
-        // nothing watching the travel limits, so it should creep.
-        public static final double MANUAL_NUDGE_POWER = 0.25;
+        // Speed of a manual dpad nudge in TeleOp, degrees per second.
+        // Deliberately slower than the aim: this is the driver hunting for a
+        // target by eye, so it should creep.
+        public static final double MANUAL_NUDGE_DEG_PER_S = 45.0;
     }
 
     public static final class Hood {
         // Positional servo that tilts the shooter hood, setting the ball's
-        // launch angle. Unlike the turret's CRServo, this is a standard Servo
-        // commanded to a repeatable position in [0, 1] and held there.
+        // launch angle. Like the turret above, a standard Servo commanded to a
+        // repeatable position in [0, 1] and held there.
         //
         // Convention used below: a HIGHER position raises the hood to a steeper
         // launch angle (shorter, higher arc). If yours is geared the other way,

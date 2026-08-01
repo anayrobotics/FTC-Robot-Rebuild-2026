@@ -173,11 +173,8 @@ public class ShooterTest extends OpMode {
         gate("turret locked on", turret.isOnTarget());
         gate("flywheel at speed", flywheel.atTargetRpm());
         gate("gate finished opening", stopper.isSettled());
-        if (turret.isUnwinding()) {
-            telemetry.addLine("   (turret is unwrapping — it will come back)");
-        }
-        if (turret.isStalled()) {
-            telemetry.addLine("!! turret gave up moving — something is snagging it");
+        if (turret.isAtLimit()) {
+            telemetry.addLine("   (turret is at its travel limit — turn the robot)");
         }
 
         telemetry.addLine();
@@ -186,7 +183,7 @@ public class ShooterTest extends OpMode {
                 flywheel.getCurrentRpm(), flywheel.getTargetRpm());
         telemetry.addData("Hood", "%.3f%s", hood.getCommandedPosition(),
                 hoodManual ? "  MANUAL (dpad up = back to auto)" : "  auto-ranged");
-        telemetry.addData("Turret travel", "%+.0f deg", turret.getTravelDeg());
+        telemetry.addData("Turret angle", "%+.0f deg", turret.getAngleDeg());
         telemetry.addData("Stopper", stopper.getState());
         telemetry.addLine();
         telemetry.addLine("Scored? Write this distance + rpm + hood into the");

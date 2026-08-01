@@ -23,16 +23,18 @@ public class Drivebase {
         heading = hardware.navxImu;
     }
 
+    // axial +forward, lateral +right, yaw +clockwise. Standard mecanum mixing —
+    // there are no sign-flip knobs here on purpose. Motor polarity belongs in
+    // Constants.Drive.LEFT_DIRECTION / RIGHT_DIRECTION, and roller handedness is
+    // mechanical: the four rollers must form an X seen from above. A single
+    // wheel mounted the wrong way round cannot be corrected here, because every
+    // term below applies to all four wheels at once. Flipping a sign to chase
+    // one bad wheel just moves the fault somewhere less obvious.
     public void drive(double axial, double lateral, double yaw){
-        // Applied here rather than at the gamepad so field-centric gets the same
-        // correction — driveFieldCentric() rotates into the robot frame and then
-        // comes through this method.
-        double strafe = Constants.Drive.INVERT_STRAFE ? -lateral : lateral;
-
-        double flPower = axial + strafe + yaw;
-        double frPower = axial - strafe - yaw;
-        double blPower = axial - strafe + yaw;
-        double brPower = axial + strafe - yaw;
+        double flPower = axial + lateral + yaw;
+        double frPower = axial - lateral - yaw;
+        double blPower = axial - lateral + yaw;
+        double brPower = axial + lateral - yaw;
 
         double max = Math.max(1.0, Math.max(Math.abs(flPower),
                 Math.max(Math.abs(frPower),

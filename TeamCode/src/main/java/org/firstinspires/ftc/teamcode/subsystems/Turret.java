@@ -1,7 +1,6 @@
 package org.firstinspires.ftc.teamcode.subsystems;
 
-import com.qualcomm.robotcore.hardware.AnalogInput;
-import com.qualcomm.robotcore.hardware.CRServo;
+import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
@@ -13,68 +12,66 @@ import org.firstinspires.ftc.teamcode.util.PIDFController;
 
 // Servo-driven turret that auto-aims at the goal AprilTag using the Limelight.
 //
-// It reads the Limelight's cached horizontal error (tx) each loop and runs a
-// PD loop that drives tx -> 0 by commanding the CRServo's rotation speed. The
-// Limelight and this turret are separate subsystems whose periodic() methods
-// both run every scheduler loop, so vision and aiming happen in parallel.
+// It reads the Limelight's cached horizontal error (tx) each loop and runs a PD
+// loop that drives tx -> 0. The Limelight and this turret are separate
+// subsystems whose periodic() methods both run every scheduler loop, so vision
+// and aiming happen in parallel.
 //
-// TRAVEL LIMIT. The turret is on a CRServo with wires running to it, so it must
-// never wind up more than a single turn. The servo's feedback wire is absolute
-// but only WITHIN one revolution -- it reads the same voltage at +170 as it
-// does a full turn later -- so this class accumulates that raw reading across
-// its 360->0 rollovers into a continuous angle, and it's that continuous angle
-// (not the raw one) that the limit is enforced against. See getTravelDeg().
+// POSITION, NOT SPEED. The turret is on a positional servo: it is told an angle
+// and holds it. So this class keeps one number — commandedDeg, the turret's
+// angle either side of straight-ahead — and every state does nothing but move
+// that number and write it out. There is no feedback wire and nothing to read
+// back, which is fine, because a positional servo can only be where it was told.
 //
-// At the limit the turret doesn't just stop: it UNWRAPS, swinging a full turn
-// the other way to the same physical heading, which spends the winding without
-// losing the aim. It can't shoot mid-unwrap (onTarget goes false) but it comes
-// out the far side still pointed at the goal.
+// The catch is that "where it was told" is only the truth if the servo can keep
+// up. That is what MAX_SLEW_DEG_PER_S is for: hold the commanded angle to a rate
+// the servo can actually achieve and the command stays a fair proxy for reality.
+// Set it too high and commandedDeg becomes a work of fiction — the turret reads
+// as parked while it is still swinging, and the travel limits stop meaning
+// anything. It is the number to get right.
+//
+// TRAVEL LIMIT. Just a clamp, applied to commandedDeg in every state. A
+// positional servo cannot spin freely, so unlike a CRServo there is no winding
+// to accumulate and nothing to unwrap: the turret physically cannot go anywhere
+// we don't send it.
+//
+// STARTING POSITION. Nothing surveys the turret at init, so this class assumes
+// it begins pointed straight ahead. Start every match that way — if it is off
+// centre, the first command snaps it across.
 public class Turret implements Subsystem {
     public enum State {
-        IDLE,             // hold still (servo stopped)
+        IDLE,             // hold the last commanded angle
         AUTO_AIM,         // track the goal tag from the Limelight
-        MANUAL,           // operator drives it directly with setManualPower()
-        RETURN_TO_ORIGIN  // park back at ORIGIN_DEG using the feedback wire
+        MANUAL,           // operator drives it directly with setManualRate()
+        RETURN_TO_ORIGIN  // park back at straight-ahead
     }
 
-    private final CRServo servo;
-    private final AnalogInput encoder;
+    private final Servo servo;
     private final Limelight limelight;
     private final PIDFController controller =
             new PIDFController(Constants.Turret.kP, Constants.Turret.kI,
                     Constants.Turret.kD, Constants.Turret.kF);
 
     private State state = State.IDLE;
-    private double manualPower = 0;
+    private double manualRateDegPerSec = 0;
     private boolean onTarget = false;
 
-    // Raw feedback as of the last periodic(), used to spot a rollover.
-    private double lastRawDeg;
-    // Raw reading accumulated across rollovers, so it keeps counting past a full
-    // turn: this is what knows the difference between "+170" and "wound a whole
-    // turn and now at +170".
-    private double continuousDeg;
-    // The continuous angle that means "straight ahead", and the ORIGIN_DEG it
-    // was built from (so a live edit on Panels re-references it).
-    private double originContinuousDeg;
-    private double originBaselineDeg;
+    // Where we have told the turret to point, in degrees off the origin.
+    // Positive is whichever way an increasing servo position swings it (see
+    // Constants.Turret.DIRECTION). Assumed 0 at init — see the class comment.
+    private double commandedDeg = 0;
 
-    // An unwrap in progress, and the travel it's heading for.
-    private boolean unwinding = false;
-    private double unwindTargetDeg = 0;
-    // Set after an unwrap, cleared once travel is comfortably back inside the
-    // limit. Stops a goal sitting right on the boundary from unwrapping forever.
-    private boolean unwindGuarded = false;
+    // The ORIGIN_POSITION that commandedDeg is currently measured against, so a
+    // live edit on Panels can be spotted. See rebaseOrigin().
+    private double originBaseline = TurretTuning.ORIGIN_POSITION;
 
-    // Stall watch for the park and unwrap moves: where the turret was when we
-    // last saw it make progress, how long ago that was, and whether we've given
-    // up on the current move.
-    private final ElapsedTime sinceProgress = new ElapsedTime();
-    private double progressReferenceDeg;
-    private boolean moveStalled = false;
+    // Wall-clock between periodic() calls, so the slew rates are real degrees
+    // per second rather than degrees per loop.
+    private final ElapsedTime sinceLastLoop = new ElapsedTime();
+    private boolean firstLoop = true;
 
     /**
-     * Turret with no camera: manual nudging, parking, and the travel limit all
+     * Turret with no camera: manual jogging, parking and the travel limits all
      * work, but AUTO_AIM has nothing to aim at and holds still. Used by the
      * bench tests so the turret can be checked out before the Limelight is
      * wired, and so a camera fault can be ruled out of a turret problem.
@@ -85,70 +82,36 @@ public class Turret implements Subsystem {
 
     public Turret(Hardware hardware, Limelight limelight) {
         servo = hardware.turret;
-        encoder = hardware.turretEncoder;
         this.limelight = limelight;
-
-        // Seed the accumulator from wherever the turret physically is at init.
-        // Absolute feedback means this is correct even if someone turned the
-        // turret by hand while the robot was off.
-        lastRawDeg = getAngleDeg();
-        continuousDeg = lastRawDeg;
-        rebaseOrigin();
     }
 
-    // Raw angle off the servo's feedback wire, 0-360 degrees, absolute within a
-    // single revolution. This is the SERVO's shaft angle: it equals the turret's
-    // angle only if the servo drives the turret 1:1. Through a reduction, scale
-    // it here.
+    // Where the turret is pointing, in degrees off straight-ahead. This is the
+    // commanded angle; with MAX_SLEW_DEG_PER_S set honestly it is also, within a
+    // servo's settling time, where the turret physically is.
     public double getAngleDeg() {
-        return encoder.getVoltage() / encoder.getMaxVoltage() * 360.0;
+        return commandedDeg;
     }
 
-    // How far the turret has wound off its origin, in degrees, NOT wrapped: past
-    // a full turn this keeps growing, which is the whole point. Positive is one
-    // way round, negative the other. This is the number the travel limit and the
-    // park loop both work in.
-    public double getTravelDeg() {
-        return continuousDeg - originContinuousDeg;
-    }
-
-    // Kept as the old name for telemetry and the tuning opmode. Same number as
-    // getTravelDeg() -- an "error from origin" that counts past 180 rather than
-    // wrapping, because a turret wound 200 degrees needs to unwind 200, not
-    // helpfully take the 160-degree "short way" and wind up a full turn.
-    public double getOriginErrorDeg() {
-        return getTravelDeg();
+    // The servo position that angle corresponds to. Only really of interest to
+    // the bench test, which needs it to tell you what to write into
+    // ORIGIN_POSITION.
+    public double getPosition() {
+        return angleToPosition(commandedDeg);
     }
 
     public boolean isAtOrigin() {
-        return Math.abs(getTravelDeg()) <= TurretTuning.RETURN_TOLERANCE_DEG;
+        return Math.abs(commandedDeg) <= TurretTuning.RETURN_TOLERANCE_DEG;
     }
 
-    // True while swinging a full turn to unwrap. The turret is deliberately off
-    // the goal for the whole move, so nothing should try to shoot.
-    public boolean isUnwinding() {
-        return unwinding;
-    }
-
-    // Put the origin on the continuous scale, on the turn the turret is
-    // currently on. Called at init, and again if ORIGIN_DEG is edited live --
-    // note that re-referencing mid-match would forget the accumulated winding,
-    // which is fine at tuning time (turret near the origin) and not something to
-    // do during a match.
-    private void rebaseOrigin() {
-        originBaselineDeg = TurretTuning.ORIGIN_DEG;
-        originContinuousDeg = continuousDeg - wrapDeg(lastRawDeg - originBaselineDeg);
-    }
-
-    // Fold an angle difference into [-180, 180].
-    private static double wrapDeg(double degrees) {
-        double d = degrees % 360.0;
-        if (d > 180.0) {
-            d -= 360.0;
-        } else if (d < -180.0) {
-            d += 360.0;
-        }
-        return d;
+    /**
+     * True when the turret is pinned against a software travel limit and the aim
+     * wants to go further. The goal is off to the side of everywhere the turret
+     * can reach: nothing is broken, but the robot has to turn before this shot
+     * is available.
+     */
+    public boolean isAtLimit() {
+        return commandedDeg <= TurretTuning.MIN_ANGLE_DEG + 0.01
+                || commandedDeg >= TurretTuning.MAX_ANGLE_DEG - 0.01;
     }
 
     public void setState(State newState) {
@@ -157,15 +120,6 @@ public class Turret implements Subsystem {
             // error/derivative into a fresh aim.
             controller.reset();
             onTarget = false;
-            // Abandon any unwrap in progress too. Its target was computed from
-            // the travel at the moment it started; parking or hand-nudging the
-            // turret in the middle invalidates that, and resuming the swing on
-            // the way back to AUTO_AIM would fling it somewhere arbitrary. The
-            // limit check will simply start a fresh unwrap if one is still due.
-            unwinding = false;
-            // A new move gets a fresh stall watch, and a fresh chance: a park
-            // that gave up should be retryable by asking for it again.
-            beginMove();
         }
         state = newState;
     }
@@ -174,8 +128,9 @@ public class Turret implements Subsystem {
         return state;
     }
 
-    public void setManualPower(double power) {
-        manualPower = power;
+    /** How fast to jog the turret by hand, in degrees per second. */
+    public void setManualRate(double degreesPerSecond) {
+        manualRateDegPerSec = degreesPerSecond;
     }
 
     // True only while auto-aiming AND locked onto the goal within tolerance.
@@ -189,15 +144,14 @@ public class Turret implements Subsystem {
      * there is nothing to measure against.
      *
      * <p>Separate from {@link #isOnTarget()} because the two answer different
-     * questions. {@code isOnTarget} is a latched band, and the turret stops its
-     * servo the moment it's true — so the aim drifts back out, the servo nudges,
-     * and the flag flickers true/false around centre even with a perfectly
-     * steady robot. Gating a burst on that flicker slams the feed shut between
-     * every ball. Mid-burst, ask "how far off are we" against a wider band
-     * instead.
+     * questions. {@code isOnTarget} is a latched band, and the turret stops
+     * commanding the moment it's true — so the aim drifts back out, the turret
+     * nudges, and the flag flickers true/false around centre even with a steady
+     * robot. Gating a burst on that flicker slams the feed shut between every
+     * ball. Mid-burst, ask "how far off are we" against a wider band instead.
      */
     public double getAimErrorDeg() {
-        if (state != State.AUTO_AIM || unwinding || !hasTarget()) {
+        if (state != State.AUTO_AIM || !hasTarget()) {
             return Double.MAX_VALUE;
         }
         return Math.abs(limelight.getTx());
@@ -207,232 +161,163 @@ public class Turret implements Subsystem {
         return limelight != null && limelight.hasTarget();
     }
 
+    /**
+     * Re-measure the current angle against a moved origin, so that shifting
+     * ORIGIN_POSITION re-labels where the turret is instead of driving it there.
+     *
+     * <p>Without this, capturing the origin at the turret's current position —
+     * which is exactly how test 4a asks you to find it — would move the origin
+     * out from under an unchanged commandedDeg and the turret would walk by the
+     * same angle again on the very next loop, every time you pressed the button.
+     */
+    private void rebaseOrigin() {
+        double moved = TurretTuning.ORIGIN_POSITION - originBaseline;
+        originBaseline = TurretTuning.ORIGIN_POSITION;
+        commandedDeg -= moved * servoRangeDeg();
+    }
+
     @Override
     public void periodic() {
-        updateAngle();
+        double dt = elapsed();
+
+        if (TurretTuning.ORIGIN_POSITION != originBaseline) {
+            rebaseOrigin();
+        }
 
         switch (state) {
             case AUTO_AIM:
-                aim();
+                aim(dt);
                 break;
 
             case MANUAL:
                 onTarget = false;
-                // The driver gets refused at the limit rather than unwrapped:
-                // a full-turn swing nobody asked for, under their own thumb,
-                // would be alarming. Motion back inward is always allowed.
-                double manual = Range.clip(manualPower, -1.0, 1.0);
-                servo.setPower(pushesPastLimit(manual) ? 0.0 : manual);
+                moveAtRate(manualRateDegPerSec, TurretTuning.MANUAL_NUDGE_DEG_PER_S, dt);
                 break;
 
             case RETURN_TO_ORIGIN:
                 onTarget = false;
-                returnToOrigin();
+                driveToAngle(0.0, TurretTuning.MAX_RETURN_DEG_PER_S, dt);
                 break;
 
             case IDLE:
             default:
                 onTarget = false;
-                servo.setPower(0);
+                // Hold wherever we were last told, rather than going limp: a
+                // turret that dropped its position on IDLE would sag under the
+                // shooter's weight and lose the one thing we know about it.
+                hold();
                 break;
         }
     }
 
-    // Accumulate the raw feedback into a continuous angle, spotting the 360->0
-    // rollover as a step of more than half a turn. Safe because the turret moves
-    // only a few degrees per loop at these power caps and a ~50 Hz loop -- it
-    // would take a jump of over 180 degrees between two reads to miscount, which
-    // is far beyond what the servo can physically do in 20 ms.
-    private void updateAngle() {
-        double raw = getAngleDeg();
-        continuousDeg += wrapDeg(raw - lastRawDeg);
-        lastRawDeg = raw;
-
-        if (TurretTuning.ORIGIN_DEG != originBaselineDeg) {
-            rebaseOrigin();
-        }
-
-        // Let another unwrap arm itself once we're back well inside the limit.
-        //
-        // NOT while one is in progress. An unwrap swings from one limit through
-        // zero to the other, so it spends most of the move inside this band; if
-        // we cleared the guard here it would always be false by the time the
-        // swing landed, and a goal hovering near the boundary could unwrap, land
-        // on the opposite limit, unwrap straight back, and ping-pong forever
-        // instead of ever shooting. That is the exact failure the guard exists
-        // to prevent, so it has to survive the move that arms it.
-        if (unwindGuarded && !unwinding
-                && Math.abs(getTravelDeg())
-                    <= TurretTuning.MAX_TRAVEL_DEG - TurretTuning.UNWIND_HYSTERESIS_DEG) {
-            unwindGuarded = false;
-            moveStalled = false;
-        }
+    /**
+     * Seconds since the last periodic(). Clamped because the first loop after
+     * INIT, or after the driver station stalls, can hand back a gap of seconds —
+     * and a slew rate multiplied by that would step the turret across its whole
+     * range in one frame, which is exactly the slam the rate cap exists to stop.
+     */
+    private double elapsed() {
+        double dt = firstLoop ? 0 : sinceLastLoop.seconds();
+        sinceLastLoop.reset();
+        firstLoop = false;
+        return Math.min(dt, 0.1);
     }
 
     // ------------------------------------------------------------------
-    // Stall detection, shared by the park and the unwrap.
-    //
-    // Both moves command the servo toward a travel target and have no way of
-    // knowing they've been blocked — by a mechanical stop inside the swing, by
-    // a cable snagging, or simply by a load the servo can't shift at this
-    // power. Left alone, driveToTravel() would hold that command against the
-    // obstruction for the rest of the match: the arrival test never passes, so
-    // for the unwrap `unwinding` never clears, aim() keeps returning early, and
-    // the robot can never shoot again. Meanwhile the servo cooks.
-    //
-    // So: if the angle stops changing while we're still asking for movement,
-    // give up, cut the power, and let telemetry say so.
+    // Commanding the servo. Everything funnels through setAngle(), so the travel
+    // limits are enforced in exactly one place and no state can route around
+    // them.
     // ------------------------------------------------------------------
 
-    private static final double STALL_PROGRESS_DEG = 3.0;
-    private static final double STALL_TIMEOUT_S = 0.75;
-
-    private void beginMove() {
-        progressReferenceDeg = getTravelDeg();
-        sinceProgress.reset();
-        moveStalled = false;
+    /**
+     * SERVO_RANGE_DEG, floored. It is the divisor for every angle-to-position
+     * conversion and it is live-editable, so a 0 typed into Panels mid-tune
+     * would make the position NaN — and a NaN handed to setPosition() takes the
+     * OpMode down mid-match.
+     */
+    private static double servoRangeDeg() {
+        return Math.max(1.0, TurretTuning.SERVO_RANGE_DEG);
     }
 
-    /** True once the current move has clearly stopped getting anywhere. */
-    private boolean checkStall() {
-        double travel = getTravelDeg();
-        if (Math.abs(travel - progressReferenceDeg) >= STALL_PROGRESS_DEG) {
-            progressReferenceDeg = travel;
-            sinceProgress.reset();
-            return false;
-        }
-        return sinceProgress.seconds() >= STALL_TIMEOUT_S;
+    private static double angleToPosition(double angleDeg) {
+        double position = TurretTuning.ORIGIN_POSITION + angleDeg / servoRangeDeg();
+        // Belt and braces on top of the angle clamp: the servo range or the
+        // origin can be mistyped on Panels mid-tune, and a position outside
+        // [0, 1] is rejected by the SDK with an exception that would take the
+        // whole OpMode down.
+        return Range.clip(position, 0.0, 1.0);
+    }
+
+    /** Clamp to the travel limits, remember, and write it out. */
+    private void setAngle(double angleDeg) {
+        commandedDeg = Range.clip(angleDeg,
+                TurretTuning.MIN_ANGLE_DEG, TurretTuning.MAX_ANGLE_DEG);
+        servo.setPosition(angleToPosition(commandedDeg));
     }
 
     /**
-     * True when a park or unwrap gave up because the turret stopped moving.
-     * Something is physically in the way — check it before running again.
+     * Re-assert the current angle.
+     *
+     * <p>Every "do nothing" path comes through here rather than simply not
+     * writing, so the turret always has holding torque once the OpMode is
+     * running. A turret left limp — no target all match, or just sat in IDLE —
+     * would flop around under the shooter's weight as the robot drove, and the
+     * commanded angle this class is built on would quietly stop being true.
+     *
+     * <p>Note this is also what ENERGIZES the servo: the hub powers servos up
+     * with PWM disabled and the first setPosition() silently re-enables it. That
+     * is why nothing is commanded from {@code Hardware.initTurret()} — the
+     * turret stays back-driveable until an OpMode actually calls periodic().
      */
-    public boolean isStalled() {
-        return moveStalled;
+    private void hold() {
+        setAngle(commandedDeg);
     }
 
-    // Which way the shaft angle moves for a positive power. The park loop's
-    // INVERT_RETURN is exactly this fact about the wiring, so reuse it.
-    private static double angleRateSign(double power) {
-        double sign = Math.signum(power);
-        return TurretTuning.INVERT_RETURN ? -sign : sign;
+    /** Step the commanded angle at the given rate, capped, for dt seconds. */
+    private void moveAtRate(double rateDegPerSec, double maxRateDegPerSec, double dt) {
+        double rate = Range.clip(rateDegPerSec, -maxRateDegPerSec, maxRateDegPerSec);
+        setAngle(commandedDeg + rate * dt);
     }
 
-    // True if this command would wind the turret further past its travel limit.
-    // Motion back toward the origin is never blocked -- refusing that would
-    // strand the turret at the stop with no way home.
-    private boolean pushesPastLimit(double power) {
-        double travel = getTravelDeg();
-        if (Math.abs(travel) < TurretTuning.MAX_TRAVEL_DEG) {
-            return false;
-        }
-        return angleRateSign(power) == Math.signum(travel);
-    }
-
-    // Proportional drive toward a target on the continuous travel scale.
-    // Returns true once it's there. Used for both the park and the unwrap --
-    // same loop, different destination and speed cap.
-    private boolean driveToTravel(double targetTravelDeg, double maxPower) {
-        double error = getTravelDeg() - targetTravelDeg;
-        if (Math.abs(error) <= TurretTuning.RETURN_TOLERANCE_DEG) {
-            // Arrived. Stop rather than dither around the target.
-            servo.setPower(0);
+    /**
+     * Ramp toward a target angle at no more than the given rate. Ramped rather
+     * than commanded outright so the servo is never asked for a step it can't
+     * physically make in one loop — which is what keeps commandedDeg honest.
+     * Returns true once it's there.
+     */
+    private boolean driveToAngle(double targetDeg, double maxRateDegPerSec, double dt) {
+        double error = targetDeg - commandedDeg;
+        double step = maxRateDegPerSec * dt;
+        if (Math.abs(error) <= step) {
+            setAngle(targetDeg);
             return true;
         }
-
-        // Negative sign: drive the error toward zero, i.e. an angle above the
-        // target has to come back down.
-        double direction = -error;
-        if (TurretTuning.INVERT_RETURN) {
-            direction = -direction;
-        }
-        double output = Range.clip(direction * TurretTuning.RETURN_kP, -maxPower, maxPower);
-        // Stiction floor — a command too small to break static friction would
-        // leave it parked just short of the target forever. Take the sign from
-        // the ERROR rather than the output: zero RETURN_kP on Panels makes the
-        // output exactly +0.0, and copySign reads that as positive, which would
-        // walk the turret off to its stop while you were mid-tune.
-        if (Math.abs(output) < TurretTuning.MIN_AIM_POWER) {
-            output = Math.copySign(TurretTuning.MIN_AIM_POWER, direction);
-        }
-        servo.setPower(output);
+        setAngle(commandedDeg + Math.copySign(step, error));
         return false;
     }
 
-    // Park back at the origin, unwinding whatever the turret has accumulated.
-    // Unlike aim(), this never goes blind: the feedback reads an absolute angle,
-    // so it works with no target in sight and knows when it has arrived instead
-    // of guessing from a timer.
-    private void returnToOrigin() {
-        if (moveStalled) {
-            // Already gave up on this park. Something is blocking the turret,
-            // and re-commanding it every loop would just grind.
-            servo.setPower(0);
-            return;
-        }
-        if (driveToTravel(0.0, TurretTuning.MAX_RETURN_POWER)) {
-            return;
-        }
-        if (checkStall()) {
-            moveStalled = true;
-            servo.setPower(0);
-        }
-    }
+    // ------------------------------------------------------------------
+    // The aim loop.
+    // ------------------------------------------------------------------
 
-    // Begin the full-turn swing to the same heading from the other side: a
-    // turret wound to +185 goes to -175, which is the same direction in the
-    // world with a turn of winding spent.
-    private void startUnwind() {
-        double travel = getTravelDeg();
-        unwindTargetDeg = travel - Math.copySign(360.0, travel);
-        unwinding = true;
-        unwindGuarded = true;
-        onTarget = false;
-        controller.reset();
-        beginMove();
-    }
-
-    private void aim() {
-        // An unwrap owns the turret until it lands. tx is meaningless while
-        // we're deliberately swinging away from the goal.
-        if (unwinding) {
-            onTarget = false;
-            if (driveToTravel(unwindTargetDeg, TurretTuning.MAX_UNWIND_POWER)) {
-                unwinding = false;
-                controller.reset();
-                return;
-            }
-            if (checkStall()) {
-                // The swing is blocked — most likely the mechanical range is
-                // less than the full turn this move assumes. Abandon it. The
-                // guard stays set, so the next loop holds at the limit instead
-                // of immediately trying the identical swing again.
-                unwinding = false;
-                moveStalled = true;
-                controller.reset();
-                servo.setPower(0);
-            }
-            return;
-        }
-
+    private void aim(double dt) {
         if (!hasTarget()) {
-            // No goal in view (or no camera at all): stop and reset the loop. Do
-            // NOT keep driving —
-            // a blind CRServo would sweep until it hits a hard stop or twists
-            // the wiring.
+            // No goal in view (or no camera at all): hold where we are and reset
+            // the loop. Do NOT keep sweeping — a blind search would leave the
+            // turret pointing somewhere arbitrary the moment the tag came back.
             onTarget = false;
             controller.reset();
-            servo.setPower(0);
+            hold();
             return;
         }
 
         double tx = limelight.getTx();
         onTarget = Math.abs(tx) <= TurretTuning.AIM_TOLERANCE_DEG;
         if (onTarget) {
-            // Close enough: stop so we don't buzz back and forth around center.
+            // Close enough: stop commanding so we don't hunt back and forth
+            // across centre chasing camera noise.
             controller.reset();
-            servo.setPower(0);
+            hold();
             return;
         }
 
@@ -442,44 +327,16 @@ public class Turret implements Subsystem {
                 TurretTuning.kD, TurretTuning.kF);
 
         // Setpoint is tx = 0; measurement is the current tx. The controller
-        // returns a power whose sign turns us back toward center.
-        double output = controller.calculate(0.0, tx);
-        output = Range.clip(output, -TurretTuning.MAX_AIM_POWER, TurretTuning.MAX_AIM_POWER);
-        // Which way "toward the target" is, independent of the gains. Used for
-        // the stiction floor below, because with kP zeroed on Panels — the
-        // normal first step of tuning — the output is exactly +0.0 and
-        // copySign would read that as positive and creep the turret away.
-        double direction = -tx;
+        // returns a slew rate in degrees per second whose sign turns us back
+        // toward centre.
+        double rate = controller.calculate(0.0, tx);
         if (TurretTuning.INVERT_OUTPUT) {
-            output = -output;
-            direction = -direction;
+            rate = -rate;
         }
-        // Floor small commands past the servo's stiction so it actually moves.
-        if (Math.abs(output) < TurretTuning.MIN_AIM_POWER) {
-            output = Math.copySign(TurretTuning.MIN_AIM_POWER, direction);
-        }
-
-        // The aim is asking us to wind past a full turn. Take the same heading
-        // from the other side instead of following the goal round and round.
-        if (pushesPastLimit(output)) {
-            if (!unwindGuarded) {
-                startUnwind();
-                aim();  // start the swing this loop rather than idling one.
-                return;
-            }
-            // Already unwrapped once and still pinned at the limit: the goal is
-            // sitting right on the boundary. Hold here rather than spinning back
-            // and forth across it. onTarget stays false, so nothing fires.
-            onTarget = false;
-            servo.setPower(0);
-            return;
-        }
-
-        servo.setPower(output);
+        moveAtRate(rate, TurretTuning.MAX_SLEW_DEG_PER_S, dt);
     }
 
     public void stop() {
         setState(State.IDLE);
-        servo.setPower(0);
     }
 }

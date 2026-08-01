@@ -59,16 +59,15 @@ import org.firstinspires.ftc.teamcode.tuning.TurretTuning;
  *   <li><b>Dpad down</b> — park the turret back at its origin (straight ahead)
  *       and hold it there, off the goal. Press again, or nudge it with dpad
  *       left/right, to resume tracking. Use it before an endgame climb or to
- *       unwind the turret; you can't shoot while parked.</li>
+ *       get the turret out of the way; you can't shoot while parked.</li>
  * </ul>
  *
- * <p>Because the turret tracks continuously rather than only while a button is
- * held, it would otherwise chase the goal round in circles as you drive. It is
- * held to one turn of travel in software and unwraps itself at the limit (see
- * {@link Turret}) — but that protection is built entirely on the servo's
- * feedback wire. If that wire is disconnected the travel never appears to
- * change, the limit never trips, and nothing stops the turret twisting its own
- * loom off. Test 4a in "Robot Test" checks it; run that before trusting this.
+ * <p><b>Start with the turret pointed straight ahead.</b> It runs on a
+ * positional servo with no feedback wire, so nothing surveys where it actually
+ * is — {@link Turret} assumes straight-ahead at init, and if the turret is
+ * off-centre the first command snaps it across. Its travel limits are software
+ * only, and they are only as good as the geometry constants; test 4a in "Robot
+ * Test" checks both, so run that before trusting this.
  */
 public abstract class MecanumTeleOp extends OpMode {
     // Trigger past this counts as "held".
@@ -159,9 +158,9 @@ public abstract class MecanumTeleOp extends OpMode {
         if (gamepad1.dpad_left || gamepad1.dpad_right) {
             turretParked = false;
             turret.setState(Turret.State.MANUAL);
-            turret.setManualPower(gamepad1.dpad_left
-                    ? -Constants.Turret.MANUAL_NUDGE_POWER
-                    : Constants.Turret.MANUAL_NUDGE_POWER);
+            turret.setManualRate(gamepad1.dpad_left
+                    ? -Constants.Turret.MANUAL_NUDGE_DEG_PER_S
+                    : Constants.Turret.MANUAL_NUDGE_DEG_PER_S);
         } else if (turretParked) {
             turret.setState(Turret.State.RETURN_TO_ORIGIN);
         } else {
@@ -285,15 +284,12 @@ public abstract class MecanumTeleOp extends OpMode {
         }
         telemetry.addData("Turret", "%s%s", turret.getState(),
                 turret.isOnTarget() ? " — LOCKED" : "");
-        if (turret.isStalled()) {
-            telemetry.addLine("!! TURRET BLOCKED — it gave up moving. Check for a snag.");
-        }
-        // Read the limit from TurretTuning, not Constants: the turret enforces
-        // the live value, and telemetry that quotes a different number than the
+        // Read the limits from TurretTuning, not Constants: the turret enforces
+        // the live values, and telemetry that quotes a different number than the
         // code obeys is worse than no telemetry.
-        telemetry.addData("Turret wind", "%+.0f deg of %.0f%s",
-                turret.getTravelDeg(), TurretTuning.MAX_TRAVEL_DEG,
-                turret.isUnwinding() ? " — UNWRAPPING" : "");
+        telemetry.addData("Turret angle", "%+.0f deg  (%.0f..%.0f)%s",
+                turret.getAngleDeg(), TurretTuning.MIN_ANGLE_DEG, TurretTuning.MAX_ANGLE_DEG,
+                turret.isAtLimit() ? " — AT LIMIT" : "");
         telemetry.addData("Flywheel", "%.0f / %.0f rpm%s",
                 flywheel.getCurrentRpm(), flywheel.getTargetRpm(),
                 flywheel.atTargetRpm() ? " — at speed" : "");
@@ -321,16 +317,6 @@ public abstract class MecanumTeleOp extends OpMode {
         if (ready) {
             return fire ? ">> FIRING" : ">> READY TO SHOOT — hold LT to fire";
         }
-        if (turret.isStalled()) {
-            // The turret tried to move and couldn't, and has cut power rather
-            // than grinding. Nothing the driver presses fixes that.
-            return ">> REVVING — TURRET BLOCKED, something is snagging it";
-        }
-        if (turret.isUnwinding()) {
-            // A full-turn swing off the goal and back. Say so, or it reads as
-            // the turret having lost the plot mid-match.
-            return ">> REVVING — turret unwrapping its wires, hold on";
-        }
         if (turretParked) {
             // Parked can't shoot: isOnTarget() is false outside AUTO_AIM. Say so
             // rather than leaving the driver waiting on a lock that isn't coming.
@@ -338,6 +324,11 @@ public abstract class MecanumTeleOp extends OpMode {
         }
         if (!limelight.hasTarget()) {
             return ">> REVVING — no goal in view, drive until the tag shows";
+        }
+        if (turret.isAtLimit()) {
+            // The goal is outside everywhere the turret can reach. Nothing is
+            // broken and no amount of waiting helps — the robot has to turn.
+            return ">> REVVING — turret at its limit, TURN THE ROBOT";
         }
         if (!turret.isOnTarget()) {
             return ">> REVVING — aiming...";

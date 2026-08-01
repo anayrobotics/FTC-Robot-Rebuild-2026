@@ -1,7 +1,5 @@
 package org.firstinspires.ftc.teamcode.hardware;
 
-import com.qualcomm.robotcore.hardware.AnalogInput;
-import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
@@ -43,13 +41,10 @@ public class Hardware {
     public DcMotorEx flywheelLeft;
     public DcMotorEx flywheelRight;
 
-    // Continuous-rotation servo that rotates the turret.
-    public CRServo turret;
-
-    // The turret servo's position-feedback wire (Axon MAX+ MK2, fourth wire) on
-    // an analog input. Absolute shaft angle, which is what lets the turret park
-    // itself back at the origin.
-    public AnalogInput turretEncoder;
+    // Positional servo that rotates the turret. Commanded to an angle, which it
+    // holds — there is no feedback wire, so the last command is the only thing
+    // that knows where the turret is pointing.
+    public Servo turret;
 
     // Positional servo that tilts the shooter hood (launch angle).
     public Servo hood;
@@ -125,10 +120,13 @@ public class Hardware {
     }
 
     public void initTurret(HardwareMap hw){
-        turret = hw.get(CRServo.class, Constants.Turret.SERVO);
+        turret = hw.get(Servo.class, Constants.Turret.SERVO);
         turret.setDirection(Constants.Turret.DIRECTION);
-        turret.setPower(0);
-        turretEncoder = hw.get(AnalogInput.class, Constants.Turret.ENCODER);
+        // Deliberately NOT commanded to a position here, for the same reason as
+        // initHood() below: the first setPosition() energizes the servo, and
+        // nothing surveys where the turret physically is, so commanding at init
+        // would snap it to an assumed centre the instant INIT is pressed.
+        // Turret.periodic() takes it from PLAY.
     }
 
     public void initHood(HardwareMap hw){
@@ -246,8 +244,7 @@ public class Hardware {
         check(results, hw, "Shooter", Constants.Flywheel.LEFT_MOTOR, DcMotorEx.class);
         check(results, hw, "Shooter", Constants.Flywheel.RIGHT_MOTOR, DcMotorEx.class);
 
-        check(results, hw, "Turret", Constants.Turret.SERVO, CRServo.class);
-        check(results, hw, "Turret", Constants.Turret.ENCODER, AnalogInput.class);
+        check(results, hw, "Turret", Constants.Turret.SERVO, Servo.class);
         check(results, hw, "Shooter", Constants.Hood.SERVO, Servo.class);
         check(results, hw, "Shooter", Constants.Stopper.SERVO, Servo.class);
 
