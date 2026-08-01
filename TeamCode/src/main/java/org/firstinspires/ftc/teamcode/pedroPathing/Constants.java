@@ -8,7 +8,6 @@ import com.pedropathing.ftc.localization.Encoder;
 import com.pedropathing.ftc.localization.constants.DriveEncoderConstants;
 import com.pedropathing.ftc.localization.constants.TwoWheelConstants;
 import com.pedropathing.paths.PathConstraints;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.teamcode.Constants.Drive;
@@ -54,18 +53,22 @@ public class Constants {
             .mass(10.65);
 
     // ------------------------------------------------------------------
-    // Mecanum drivetrain: config names + directions mirror Drivebase.
-    // Left side is REVERSE so positive power drives forward.
+    // Mecanum drivetrain: config names + directions taken from Drive, NOT
+    // repeated here. The follower builds its own motor objects instead of
+    // reusing Hardware's, so these used to be a hand-copied second set of the
+    // same four values — flip a motor in Drive to fix TeleOp and autonomous
+    // would silently keep driving it the old way, which is a miserable thing
+    // to debug. One place to change, both consumers.
     // ------------------------------------------------------------------
     public static MecanumConstants driveConstants = new MecanumConstants()
             .leftFrontMotorName(Drive.FRONT_LEFT)
             .leftRearMotorName(Drive.BACK_LEFT)
             .rightFrontMotorName(Drive.FRONT_RIGHT)
             .rightRearMotorName(Drive.BACK_RIGHT)
-            .leftFrontMotorDirection(DcMotorSimple.Direction.REVERSE)
-            .leftRearMotorDirection(DcMotorSimple.Direction.REVERSE)
-            .rightFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
-            .rightRearMotorDirection(DcMotorSimple.Direction.FORWARD)
+            .leftFrontMotorDirection(Drive.FRONT_LEFT_DIRECTION)
+            .leftRearMotorDirection(Drive.BACK_LEFT_DIRECTION)
+            .rightFrontMotorDirection(Drive.FRONT_RIGHT_DIRECTION)
+            .rightRearMotorDirection(Drive.BACK_RIGHT_DIRECTION)
             // TODO tune: max wheel velocities (in/s) from the velocity tuners.
             .xVelocity(57.0)
             .yVelocity(45.0);

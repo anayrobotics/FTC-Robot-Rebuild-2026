@@ -91,10 +91,10 @@ public class Hardware {
         backLeft = hw.get(DcMotorEx.class, Constants.Drive.BACK_LEFT);
         backRight = hw.get(DcMotorEx.class, Constants.Drive.BACK_RIGHT);
 
-        frontLeft.setDirection(Constants.Drive.LEFT_DIRECTION);
-        backLeft.setDirection(Constants.Drive.LEFT_DIRECTION);
-        frontRight.setDirection(Constants.Drive.RIGHT_DIRECTION);
-        backRight.setDirection(Constants.Drive.RIGHT_DIRECTION);
+        frontLeft.setDirection(Constants.Drive.FRONT_LEFT_DIRECTION);
+        backLeft.setDirection(Constants.Drive.BACK_LEFT_DIRECTION);
+        frontRight.setDirection(Constants.Drive.FRONT_RIGHT_DIRECTION);
+        backRight.setDirection(Constants.Drive.BACK_RIGHT_DIRECTION);
 
         setZeroPowerBehavior(Constants.Drive.ZERO_POWER_BEHAVIOR);
         setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);

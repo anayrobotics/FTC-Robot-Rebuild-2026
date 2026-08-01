@@ -14,9 +14,22 @@ public class Constants {
         public static final String BACK_LEFT = "backLeftDrive";
         public static final String BACK_RIGHT = "backRightDrive";
 
-        // Right side reversed so positive power drives forward.
-        public static final DcMotor.Direction LEFT_DIRECTION = DcMotor.Direction.REVERSE;
-        public static final DcMotor.Direction RIGHT_DIRECTION = DcMotor.Direction.FORWARD;
+        // Per motor, not per side, and that is the whole point: one motor wired
+        // or geared backwards is a common fault, and a per-side constant cannot
+        // express it — flipping the side to fix one wheel breaks the other.
+        // Flip exactly the one that is wrong.
+        //
+        // The left side defaults to REVERSE so that positive power drives
+        // forward on both sides. Check each motor on its own with test 1a
+        // (Drive Motor Check): looking down at the robot, every wheel's top
+        // surface must travel toward the FRONT on the right trigger.
+        //
+        // This is the only correct place to fix a direction problem. Do not add
+        // sign flips to Drivebase.drive() — see the comment there for why.
+        public static final DcMotor.Direction FRONT_LEFT_DIRECTION = DcMotor.Direction.REVERSE;
+        public static final DcMotor.Direction BACK_LEFT_DIRECTION = DcMotor.Direction.REVERSE;
+        public static final DcMotor.Direction FRONT_RIGHT_DIRECTION = DcMotor.Direction.FORWARD;
+        public static final DcMotor.Direction BACK_RIGHT_DIRECTION = DcMotor.Direction.FORWARD;
 
         public static final DcMotor.ZeroPowerBehavior ZERO_POWER_BEHAVIOR = DcMotor.ZeroPowerBehavior.BRAKE;
 
@@ -50,8 +63,8 @@ public class Constants {
         public static final String RIGHT_MOTOR = "flywheelRight";
 
         // The two motors face opposite ways, so one is reversed to spin the wheel together.
-        public static final DcMotor.Direction LEFT_DIRECTION = DcMotor.Direction.REVERSE;
-        public static final DcMotor.Direction RIGHT_DIRECTION = DcMotor.Direction.FORWARD;
+        public static final DcMotor.Direction LEFT_DIRECTION = DcMotor.Direction.FORWARD;
+        public static final DcMotor.Direction RIGHT_DIRECTION = DcMotor.Direction.REVERSE;
 
         // Encoder counts per revolution of the flywheel shaft. 28 = bare REV/goBILDA
         // 6000 rpm motor (no gearbox). Change if your flywheel is geared.
