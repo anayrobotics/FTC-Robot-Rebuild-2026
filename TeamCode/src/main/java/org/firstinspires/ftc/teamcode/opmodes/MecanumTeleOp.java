@@ -15,6 +15,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Hood;
 import org.firstinspires.ftc.teamcode.subsystems.Indexer;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Limelight;
+import org.firstinspires.ftc.teamcode.subsystems.Stopper;
 import org.firstinspires.ftc.teamcode.subsystems.Turret;
 
 @TeleOp(name = "Mecanum TeleOp 67", group = "Drive")
@@ -30,6 +31,7 @@ public class MecanumTeleOp extends OpMode {
     private Indexer indexer;
     private Flywheel flywheel;
     private Hood hood;
+    private Stopper stopper;
     private Limelight limelight;
     private Turret turret;
 
@@ -45,13 +47,14 @@ public class MecanumTeleOp extends OpMode {
         indexer = new Indexer(hardware);
         flywheel = new Flywheel(hardware);
         hood = new Hood(hardware);
+        stopper = new Stopper(hardware);
         limelight = new Limelight(hardware);
         turret = new Turret(hardware, limelight);
 
         scheduler.reset();
         // Order matters: the Limelight must refresh BEFORE the Turret reads it,
         // so the turret aims on this loop's fresh vision data.
-        scheduler.registerSubsystem(intake, indexer, flywheel, hood, limelight, turret);
+        scheduler.registerSubsystem(intake, indexer, flywheel, hood, stopper, limelight, turret);
 
         telemetry.addLine("Initialized.");
         telemetry.addData("Aiming at", targetName());
@@ -148,15 +151,25 @@ public class MecanumTeleOp extends OpMode {
             hood.setFarPreset();
         }
 
-        // Hold left trigger to FIRE — but the indexer only feeds when we're
-        // actually locked on AND up to speed, so we never launch a shot that
-        // would miss. Releasing the trigger stops the feed.
+        // Hold left trigger to FIRE — but the gate only opens and the indexer
+        // only feeds when we're actually locked on AND up to speed, so we never
+        // launch a shot that would miss. Releasing the trigger shuts the gate
+        // and stops the feed.
         boolean fire = gamepad2.left_trigger > TRIGGER_THRESHOLD;
         boolean ready = turret.isOnTarget() && flywheel.atTargetRpm();
-        if (fire) {
-            indexer.setState(ready ? Indexer.State.FEEDING : Indexer.State.IDLE);
-        } else if (firePrev) {
-            indexer.setState(Indexer.State.IDLE);
+        if (fire && ready) {
+            // Clear the gate first, and only start feeding once it has had time
+            // to actually swing open — the servo has no position feedback, so
+            // feeding immediately would ram a ball into a half-open stopper.
+            stopper.open();
+            indexer.setState(stopper.isSettled() ? Indexer.State.FEEDING : Indexer.State.IDLE);
+        } else {
+            // Not firing, or aim/speed dropped mid-burst: hold the next ball
+            // back. Pausing the feed beats letting a shot go that would miss.
+            stopper.block();
+            if (fire || firePrev) {
+                indexer.setState(Indexer.State.IDLE);
+            }
         }
         firePrev = fire;
 
@@ -170,6 +183,7 @@ public class MecanumTeleOp extends OpMode {
         telemetry.addData("Flywheel actual", "%.0f rpm", flywheel.getCurrentRpm());
         telemetry.addData("Flywheel at speed", flywheel.atTargetRpm());
         telemetry.addData("Hood position", "%.2f", hood.getCommandedPosition());
+        telemetry.addData("Stopper", stopper.getState());
         telemetry.addLine();
         telemetry.addData("Aiming at", targetName());
         telemetry.addData("Turret", turret.getState());
@@ -194,6 +208,10 @@ public class MecanumTeleOp extends OpMode {
         drivebase.stop();
         flywheel.stop();
         hood.stop();
+        // The scheduler is already cancelled, so push the closed position to the
+        // servo ourselves rather than waiting for a periodic() that won't come.
+        stopper.stop();
+        stopper.periodic();
         turret.stop();
         hardware.limelight.stop();
     }

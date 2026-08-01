@@ -30,6 +30,10 @@ public class Hardware {
     // Positional servo that tilts the shooter hood (launch angle).
     public Servo hood;
 
+    // Two-position gate servo just before the flywheel: holds the next ball back
+    // until we're ready to shoot.
+    public Servo stopper;
+
     // Limelight 3A smart camera (AprilTag targeting).
     public Limelight3A limelight;
 
@@ -76,6 +80,12 @@ public class Hardware {
         hood.setDirection(Constants.Hood.DIRECTION);
         // Start stowed so the hood doesn't slam to a random angle on init.
         hood.setPosition(Constants.Hood.DEFAULT_POSITION);
+
+        stopper = hw.get(Servo.class, Constants.Stopper.SERVO);
+        stopper.setDirection(Constants.Stopper.DIRECTION);
+        // Park the gate CLOSED at init so a preloaded ball can't sit against the
+        // flywheel before the match starts.
+        stopper.setPosition(Constants.Stopper.BLOCKING_POSITION);
 
         limelight = hw.get(Limelight3A.class, Constants.Vision.LIMELIGHT);
         limelight.pipelineSwitch(Constants.Vision.PIPELINE);

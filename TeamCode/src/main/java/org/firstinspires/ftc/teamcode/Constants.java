@@ -152,6 +152,28 @@ public class Constants {
         public static final double[] RANGE_POSITIONS   = {0.30, 0.45, 0.60, 0.70};
     }
 
+    public static final class Stopper {
+        // Positional servo gate sitting between the indexer and the flywheel. It
+        // only ever lives at two positions: BLOCKING (holds the next ball back so
+        // it can't touch the wheel) and OPEN (clears the path to fire). Keeping a
+        // ball off the flywheel until we're aimed and up to speed is what stops
+        // the wheel getting bogged down mid-spinup.
+        public static final String SERVO = "stopper";
+        public static final com.qualcomm.robotcore.hardware.Servo.Direction DIRECTION =
+                com.qualcomm.robotcore.hardware.Servo.Direction.FORWARD;
+
+        // The two positions. These are STARTING GUESSES — jog the servo on the
+        // real robot (Panels, via StopperTuning) and copy the values that
+        // actually block and actually clear back into here.
+        public static final double BLOCKING_POSITION = 0.25;
+        public static final double OPEN_POSITION = 0.65;
+
+        // How long the servo needs to physically travel between the two
+        // positions, in seconds. Used to report when the gate has finished
+        // moving — a servo has no position feedback, so this is just a timer.
+        public static final double TRAVEL_TIME_S = 0.25;
+    }
+
     public static final class DriveToPose {
         // Point-to-point drive controller: three PIDs run in the ROBOT frame and
         // drive the pose error (from PedroPathing's localizer) to zero.
