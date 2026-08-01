@@ -1,7 +1,6 @@
 package org.firstinspires.ftc.teamcode.opmodes;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
-import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import org.firstinspires.ftc.teamcode.Constants;
 import org.firstinspires.ftc.teamcode.commands.CommandScheduler;
@@ -18,8 +17,41 @@ import org.firstinspires.ftc.teamcode.subsystems.Limelight;
 import org.firstinspires.ftc.teamcode.subsystems.Stopper;
 import org.firstinspires.ftc.teamcode.subsystems.Turret;
 
-@TeleOp(name = "Mecanum TeleOp 67", group = "Drive")
-public class MecanumTeleOp extends OpMode {
+/**
+ * Single-driver TeleOp: the whole robot on gamepad1, no operator.
+ *
+ * <p>This class holds the behaviour and carries no {@code @TeleOp} annotation.
+ * Alliance is chosen by picking the opmode on the driver station — {@link
+ * BlueTeleOp} or {@link RedTeleOp} — and the only difference between them is
+ * which goal AprilTag the turret hunts for.
+ *
+ * <h2>Controls — gamepad1 only</h2>
+ * <ul>
+ *   <li><b>Left stick</b> — translate. Always field-relative.</li>
+ *   <li><b>Right stick X</b> — turn.</li>
+ *   <li><b>Options</b> — re-zero field-forward. Point the robot downfield and
+ *       press, at the start and any time the heading drifts.</li>
+ *   <li><b>Right bumper</b> — toggle the intake on/off.</li>
+ *   <li><b>Right trigger</b> — spit out, while held.</li>
+ *   <li><b>A</b> — toggle the indexer on/off.</li>
+ *   <li><b>B</b> — reverse the indexer while held, to back a jam out.</li>
+ *   <li><b>X</b> — spin the flywheel up to the preset. <b>Y</b> — stop it.</li>
+ *   <li><b>Dpad left / right</b> — nudge the turret by hand, while held.</li>
+ *   <li><b>Left bumper</b> — hold to auto-aim: the turret tracks the goal and
+ *       the flywheel auto-ranges to the measured distance.</li>
+ *   <li><b>Left trigger</b> — hold to FIRE. The gate only opens and the indexer
+ *       only feeds once the turret is locked on AND the flywheel is up to
+ *       speed, so a shot that would miss never leaves the robot.</li>
+ * </ul>
+ *
+ * <p>The hood has no buttons — it auto-ranges off the Limelight every loop,
+ * whether or not you're holding auto-aim.
+ *
+ * <p>Both bumper/trigger pairs sit under the left hand for shooting (aim, fire)
+ * and the right hand for ball handling (intake, spit), so neither thumb has to
+ * leave its stick mid-drive.
+ */
+public abstract class MecanumTeleOp extends OpMode {
     // Trigger past this counts as "held".
     private static final double TRIGGER_THRESHOLD = 0.5;
 
@@ -35,9 +67,20 @@ public class MecanumTeleOp extends OpMode {
     private Limelight limelight;
     private Turret turret;
 
-    private boolean fieldCentric = true;
-    // Tracks the fire trigger so we can stop feeding exactly when it's released.
-    private boolean firePrev = false;
+    // Latched by the right bumper. The spit-out trigger outranks it while held
+    // without clearing it, so releasing the trigger resumes intaking.
+    private boolean intakeLatched = false;
+    // Latched by A, same idea — outranked by the fire trigger and by B.
+    private boolean indexerLatched = false;
+
+    // Last state actually commanded. Both desired states are recomputed from
+    // scratch every loop, so these keep us from re-scheduling the same command
+    // fifty times a second.
+    private Intake.State lastIntakeState = Intake.State.IDLE;
+    private Indexer.State lastIndexerState = Indexer.State.IDLE;
+
+    /** Which goal AprilTag this alliance's turret aims at. */
+    protected abstract int goalTagId();
 
     @Override
     public void init(){
@@ -51,134 +94,125 @@ public class MecanumTeleOp extends OpMode {
         limelight = new Limelight(hardware);
         turret = new Turret(hardware, limelight);
 
+        // Set once here instead of on a button, so there's no way to start a
+        // match aimed at the other alliance's goal.
+        limelight.setTargetTagId(goalTagId());
+
         scheduler.reset();
         // Order matters: the Limelight must refresh BEFORE the Turret reads it,
         // so the turret aims on this loop's fresh vision data.
         scheduler.registerSubsystem(intake, indexer, flywheel, hood, stopper, limelight, turret);
 
-        telemetry.addLine("Initialized.");
+        telemetry.addLine("Initialized — single driver, gamepad1.");
         telemetry.addData("Aiming at", targetName());
+        telemetry.addLine("RB intake toggle / RT spit  |  A indexer toggle / B reverse");
+        telemetry.addLine("X-Y flywheel  |  dpad L-R turret nudge  |  LB aim, LT fire");
+        telemetry.addLine("Options re-zeroes heading.");
         telemetry.update();
     }
 
     @Override
     public void loop(){
-        // Driving (gamepad1).
-        if (gamepad1.options) {
+        // --- Driving ---
+        if (gamepad1.optionsWasPressed()) {
             drivebase.resetHeading();
         }
-        drivebase.driveWithGamepad(gamepad1, fieldCentric);
+        drivebase.driveWithGamepad(gamepad1, true);
 
-        // Alliance goal selection (gamepad1). Pick which AprilTag the turret
-        // hunts for — do this once at the start of the match for your alliance.
-        if (gamepad1.dpadLeftWasPressed()) {
-            limelight.setTargetTagId(Constants.Vision.BLUE_GOAL_TAG);
-        }
-        if (gamepad1.dpadRightWasPressed()) {
-            limelight.setTargetTagId(Constants.Vision.RED_GOAL_TAG);
-        }
+        // Both shooter holds live under the left hand.
+        boolean autoAim = gamepad1.left_bumper;
+        boolean fire = gamepad1.left_trigger > TRIGGER_THRESHOLD;
 
-        // Intake (gamepad2). rising-edge presses schedule state changes.
-        if (gamepad2.rightBumperWasPressed()) {
-            scheduler.schedule(new SetIntakeStateCommand(intake, Intake.State.INTAKING));
-        }
-        if (gamepad2.leftBumperWasPressed()) {
-            scheduler.schedule(new SetIntakeStateCommand(intake, Intake.State.OUTTAKING));
-        }
-        if (gamepad2.aWasPressed()) {
-            scheduler.schedule(new SetIntakeStateCommand(intake, Intake.State.IDLE));
-        }
-
-        // Indexer manual control (gamepad2). Auto-fire below can override this
-        // while the fire trigger is held.
-        if (gamepad2.dpadUpWasPressed()) {
-            scheduler.schedule(new SetIndexerStateCommand(indexer, Indexer.State.FEEDING));
-        }
-        if (gamepad2.dpadDownWasPressed()) {
-            scheduler.schedule(new SetIndexerStateCommand(indexer, Indexer.State.REVERSING));
-        }
-        if (gamepad2.bWasPressed()) {
-            scheduler.schedule(new SetIndexerStateCommand(indexer, Indexer.State.IDLE));
-        }
-
-        // Flywheel manual presets (gamepad2). X spins up, Y stops. Auto-aim
-        // (below) overrides the target RPM while it's active.
-        if (gamepad2.xWasPressed()) {
-            scheduler.schedule(new SetFlywheelRpmCommand(flywheel, Constants.Flywheel.SHOOT_RPM));
-        }
-        if (gamepad2.yWasPressed()) {
-            scheduler.schedule(new SetFlywheelRpmCommand(flywheel, 0));
-        }
-
-        // --- Turret + shooter integration (gamepad2) ---
-        // Hold right trigger: turret auto-aims at the goal AND the flywheel
-        // auto-ranges to the measured distance. These run in parallel via the
-        // Limelight and Turret subsystem periodics.
-        boolean autoAim = gamepad2.right_trigger > TRIGGER_THRESHOLD;
+        // --- Turret ---
+        // Auto-aim wins; failing that, dpad left/right nudges it by hand.
+        // Everything released parks the servo — a CRServo left running has no
+        // travel limit and would sweep into a hard stop.
         if (autoAim) {
             turret.setState(Turret.State.AUTO_AIM);
-
-            double distance = limelight.getDistanceMeters();
-            if (distance > 0) {
-                // Range read is good: auto-range both the flywheel speed and the
-                // hood angle to the measured distance.
-                flywheel.setTargetRpm(Flywheel.rpmForDistance(distance));
-                hood.setForDistance(distance);
-            } else {
-                // No range read yet — fall back to the flywheel preset and leave
-                // the hood wherever the operator last put it.
-                flywheel.setTargetRpm(Constants.Flywheel.SHOOT_RPM);
-            }
+        } else if (gamepad1.dpad_left || gamepad1.dpad_right) {
+            turret.setState(Turret.State.MANUAL);
+            turret.setManualPower(gamepad1.dpad_left
+                    ? -Constants.Turret.MANUAL_NUDGE_POWER
+                    : Constants.Turret.MANUAL_NUDGE_POWER);
         } else {
-            // Not aiming: let the operator nudge the turret with the right stick.
-            double manual = gamepad2.right_stick_x;
-            if (Math.abs(manual) > Constants.Drive.DEADZONE) {
-                turret.setState(Turret.State.MANUAL);
-                turret.setManualPower(manual);
-            } else {
-                turret.setState(Turret.State.IDLE);
-            }
+            turret.setState(Turret.State.IDLE);
         }
 
-        // Manual hood presets (gamepad2): snap to a close/flat or far/steep
-        // angle. Useful when shooting without a range read, or to override the
-        // auto-ranged angle. dpad up/down are taken by the indexer, so the hood
-        // uses dpad left/right.
-        if (gamepad2.dpadLeftWasPressed()) {
-            hood.setNearPreset();
-        }
-        if (gamepad2.dpadRightWasPressed()) {
-            hood.setFarPreset();
+        // --- Hood: fully automatic ---
+        // No buttons at all. Any time the Limelight has a range read the hood
+        // tracks it; with no read it holds its last angle.
+        double distance = limelight.getDistanceMeters();
+        if (distance > 0) {
+            hood.setForDistance(distance);
         }
 
-        // Hold left trigger to FIRE — but the gate only opens and the indexer
-        // only feeds when we're actually locked on AND up to speed, so we never
-        // launch a shot that would miss. Releasing the trigger shuts the gate
-        // and stops the feed.
-        boolean fire = gamepad2.left_trigger > TRIGGER_THRESHOLD;
+        // --- Flywheel ---
+        // X/Y are the manual preset and stop. While auto-aim is held the
+        // measured distance overrides the target RPM, falling back to the preset
+        // when there's no range read yet.
+        if (gamepad1.xWasPressed()) {
+            scheduler.schedule(new SetFlywheelRpmCommand(flywheel, Constants.Flywheel.SHOOT_RPM));
+        }
+        if (gamepad1.yWasPressed()) {
+            scheduler.schedule(new SetFlywheelRpmCommand(flywheel, 0));
+        }
+        if (autoAim) {
+            flywheel.setTargetRpm(distance > 0
+                    ? Flywheel.rpmForDistance(distance)
+                    : Constants.Flywheel.SHOOT_RPM);
+        }
+
+        // --- Intake: latching bumper, momentary spit ---
+        if (gamepad1.rightBumperWasPressed()) {
+            intakeLatched = !intakeLatched;
+        }
+        Intake.State wantIntake;
+        if (gamepad1.right_trigger > TRIGGER_THRESHOLD) {
+            wantIntake = Intake.State.OUTTAKING;
+        } else {
+            wantIntake = intakeLatched ? Intake.State.INTAKING : Intake.State.IDLE;
+        }
+        if (wantIntake != lastIntakeState) {
+            scheduler.schedule(new SetIntakeStateCommand(intake, wantIntake));
+            lastIntakeState = wantIntake;
+        }
+
+        // --- Indexer + gate ---
+        // Three claims on one motor, highest priority first: the fire trigger,
+        // a held B to back a jam out, then the A toggle for loading up.
+        if (gamepad1.aWasPressed()) {
+            indexerLatched = !indexerLatched;
+        }
         boolean ready = turret.isOnTarget() && flywheel.atTargetRpm();
+        Indexer.State wantIndexer;
         if (fire && ready) {
-            // Clear the gate first, and only start feeding once it has had time
-            // to actually swing open — the servo has no position feedback, so
+            // Clear the gate first, and only feed once it has had time to
+            // actually swing open — the servo has no position feedback, so
             // feeding immediately would ram a ball into a half-open stopper.
             stopper.open();
-            indexer.setState(stopper.isSettled() ? Indexer.State.FEEDING : Indexer.State.IDLE);
+            wantIndexer = stopper.isSettled() ? Indexer.State.FEEDING : Indexer.State.IDLE;
         } else {
             // Not firing, or aim/speed dropped mid-burst: hold the next ball
             // back. Pausing the feed beats letting a shot go that would miss.
             stopper.block();
-            if (fire || firePrev) {
-                indexer.setState(Indexer.State.IDLE);
+            if (fire) {
+                wantIndexer = Indexer.State.IDLE;
+            } else if (gamepad1.b) {
+                wantIndexer = Indexer.State.REVERSING;
+            } else {
+                wantIndexer = indexerLatched ? Indexer.State.FEEDING : Indexer.State.IDLE;
             }
         }
-        firePrev = fire;
+        if (wantIndexer != lastIndexerState) {
+            scheduler.schedule(new SetIndexerStateCommand(indexer, wantIndexer));
+            lastIndexerState = wantIndexer;
+        }
 
         scheduler.run();
 
-        telemetry.addData("Mode", fieldCentric ? "Field-centric" : "Robot-centric");
-        telemetry.addData("Heading (deg)", Math.toDegrees(drivebase.getHeading()));
-        telemetry.addData("Intake", intake.getState());
-        telemetry.addData("Indexer", indexer.getState());
+        telemetry.addData("Heading (deg)", "%.1f", Math.toDegrees(drivebase.getHeading()));
+        telemetry.addData("Intake", "%s%s", intake.getState(), intakeLatched ? " (latched)" : "");
+        telemetry.addData("Indexer", "%s%s", indexer.getState(), indexerLatched ? " (latched)" : "");
         telemetry.addData("Flywheel target", flywheel.getTargetRpm());
         telemetry.addData("Flywheel actual", "%.0f rpm", flywheel.getCurrentRpm());
         telemetry.addData("Flywheel at speed", flywheel.atTargetRpm());
@@ -190,7 +224,7 @@ public class MecanumTeleOp extends OpMode {
         telemetry.addData("Target visible", limelight.hasTarget());
         if (limelight.hasTarget()) {
             telemetry.addData("tx (deg)", "%.2f", limelight.getTx());
-            telemetry.addData("Distance (m)", "%.2f", limelight.getDistanceMeters());
+            telemetry.addData("Distance (m)", "%.2f", distance);
         }
         telemetry.addData("Turret on target", turret.isOnTarget());
         telemetry.addData("READY TO SHOOT", ready);

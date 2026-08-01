@@ -110,6 +110,11 @@ public class Constants {
         // A CRServo below this power usually can't overcome its own stiction, so
         // when we do need to move we floor the command to at least this much.
         public static final double MIN_AIM_POWER = 0.05;
+
+        // Speed of a manual dpad nudge in TeleOp. Deliberately slower than
+        // MAX_AIM_POWER: this is the driver hunting for a target by eye, with
+        // nothing watching the travel limits, so it should creep.
+        public static final double MANUAL_NUDGE_POWER = 0.25;
     }
 
     public static final class Hood {
