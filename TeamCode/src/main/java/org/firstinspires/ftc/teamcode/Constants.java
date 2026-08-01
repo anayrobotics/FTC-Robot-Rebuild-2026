@@ -14,8 +14,8 @@ public class Constants {
         public static final String BACK_LEFT = "backLeftDrive";
         public static final String BACK_RIGHT = "backRightDrive";
 
-        // Right side reversed so positive power drives forward.
-        public static final DcMotor.Direction LEFT_DIRECTION = DcMotor.Direction.REVERSE;
+        // All four drive motors currently use the same positive direction.
+        public static final DcMotor.Direction LEFT_DIRECTION = DcMotor.Direction.FORWARD;
         public static final DcMotor.Direction RIGHT_DIRECTION = DcMotor.Direction.FORWARD;
 
         public static final DcMotor.ZeroPowerBehavior ZERO_POWER_BEHAVIOR = DcMotor.ZeroPowerBehavior.BRAKE;
