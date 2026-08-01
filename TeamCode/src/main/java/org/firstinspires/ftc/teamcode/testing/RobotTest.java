@@ -46,7 +46,10 @@ public class RobotTest extends SelectableOpMode {
             });
 
             s.folder("4 - Turret", f -> {
-                f.add("4a Positional Manual + Neutral (no camera)", TurretManualTest::new);
+                f.add("4a Command Neutral (no camera)", TurretNeutralTest::new);
+                f.add("4b Command Max Left (no camera)", TurretMaxLeftTest::new);
+                f.add("4c Command Max Right (no camera)", TurretMaxRightTest::new);
+                f.add("4d Positional Manual (no camera)", TurretManualTest::new);
             });
 
             s.folder("5 - Vision + Auto-Aim", f -> {
