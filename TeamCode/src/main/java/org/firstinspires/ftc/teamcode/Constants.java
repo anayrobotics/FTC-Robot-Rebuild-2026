@@ -50,8 +50,8 @@ public class Constants {
         public static final String RIGHT_MOTOR = "flywheelRight";
 
         // The two motors face opposite ways, so one is reversed to spin the wheel together.
-        public static final DcMotor.Direction LEFT_DIRECTION = DcMotor.Direction.FORWARD;
-        public static final DcMotor.Direction RIGHT_DIRECTION = DcMotor.Direction.REVERSE;
+        public static final DcMotor.Direction LEFT_DIRECTION = DcMotor.Direction.REVERSE;
+        public static final DcMotor.Direction RIGHT_DIRECTION = DcMotor.Direction.FORWARD;
 
         // Encoder counts per revolution of the flywheel shaft. 28 = bare REV/goBILDA
         // 6000 rpm motor (no gearbox). Change if your flywheel is geared.
@@ -62,14 +62,14 @@ public class Constants {
 
         // Velocity PIDF gains. kF is the dominant term (feedforward = kF * targetRpm),
         // P/I/D correct the remaining error. Tune kF first, then kP, then kD.
-        public static final double kP = 0.0003;
+        public static final double kP = 0.0005; //0.0003
         public static final double kI = 0.0;
-        public static final double kD = 0.00001;
+        public static final double kD = 0.00003;
         public static final double kF = 1.0 / MAX_RPM;
 
         // Considered "at target", and therefore ready to START a shot, within
         // this many RPM.
-        public static final double RPM_TOLERANCE = 75.0;
+        public static final double RPM_TOLERANCE = 25.0;
 
         // The band that KEEPS a burst feeding once it has started. Much wider,
         // and it has to be: putting a ball through the wheel drops it by a
@@ -225,8 +225,8 @@ public class Constants {
         // preset, a stale auto-range value, or a mis-scaled table can never
         // drive the linkage into a hard stop and strip the servo. TIGHTEN these
         // to the real mechanical limits once you've found them on the robot.
-        public static final double MIN_POSITION = 0.15;
-        public static final double MAX_POSITION = 0.85;
+        public static final double MIN_POSITION = 0.00;
+        public static final double MAX_POSITION = 0.4;
 
         // Where the hood sits at init and when the shooter is idle (stowed low).
         public static final double DEFAULT_POSITION = MIN_POSITION;
