@@ -15,6 +15,10 @@ public class Hardware {
     public DcMotorEx backLeft;
     public DcMotorEx backRight;
 
+    public DcMotorEx wheel1;
+
+    public DcMotorEx wheel2;
+
     public DcMotorEx intake;
     public DcMotorEx indexer;
 
@@ -55,6 +59,11 @@ public class Hardware {
         // navX is the only heading source. It calibrates on power-up.
         navxImu.initialize(hw, Constants.Imu.NAVX);
         navxImu.resetYaw();
+    }
+
+    public void initTwoWheels(HardwareMap hw){
+        wheel1 = hw.get(DcMotorEx.class, "wheel1");
+        wheel2 = hw.get(DcMotorEx.class, "wheel2");
     }
 
     public void init(HardwareMap hw){
