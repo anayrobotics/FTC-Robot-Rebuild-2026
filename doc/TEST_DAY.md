@@ -217,6 +217,41 @@ Shot angles come later, in 6a, once you're shooting at a real goal.
 
 ---
 
+### 3c — Ball Path + Shooter, together
+
+**Run:** `3 - Shooter → 3c Ball Path + Shooter` · **guard on.**
+**A** toggles the flywheel · right stick up/down ramps the target RPM ·
+**RB** intake in · **RT** intake out · **LB** indexer feed · **LT** indexer reverse ·
+dpad left/right hood ∓0.01 · dpad up/down hood ±0.05 · **X** near · **B** far ·
+**Y** stow. Only the flywheel latches.
+
+Intake, indexer, both flywheels and the hood in one OpMode. 2a/3a/3b each proved
+one mechanism alone, which finds a miswired motor but tells you nothing about four
+motors pulling at once. **Watch the battery line as much as the mechanisms** — the
+test prints the lowest voltage seen since INIT, because the sag that matters
+happens during a half-second spin-up and is easy to miss live.
+
+What to prove:
+
+- **Both flywheel motors agree** — same sign, similar magnitude. The PID only
+  reads the left encoder, so a wrong `RIGHT_DIRECTION` shows up as the pair
+  fighting: low speed, both currents high, loop pushing harder.
+- **The RPM holds with the ball path running.** Spin up, then run intake and
+  indexer together. A target the wheel held alone but loses under load is a power
+  problem, not a PID one.
+- **Voltage stays above 11 V.** Below that, any shooting table you tune now won't
+  hold at the end of a match.
+- **The hood stays put under vibration.** Jog it while the wheel is at speed.
+
+> **The stopper and turret are not powered here.** Nothing initializes or commands
+> them, so this test runs fine with either unplugged or half-built — which is the
+> point. But that also means an installed gate sits wherever it was left with no
+> holding torque, so feeding the indexer may push a ball straight through or jam
+> against a dead gate. Both are expected. Gate timing is 2b; the full
+> aim-rev-fire chain is 6a.
+
+---
+
 ## 4 — Turret
 
 ### 4a — Encoder + Manual + Park (no camera)

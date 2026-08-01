@@ -42,6 +42,7 @@ public class RobotTest extends SelectableOpMode {
             s.folder("3 - Shooter", f -> {
                 f.add("3a Flywheel RPM", FlywheelTest::new);
                 f.add("3b Hood Angle", HoodTest::new);
+                f.add("3c Ball Path + Shooter (no gate, no turret)", BallPathShooterTest::new);
             });
 
             s.folder("4 - Turret", f -> {
