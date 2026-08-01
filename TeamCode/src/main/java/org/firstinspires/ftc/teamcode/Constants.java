@@ -29,9 +29,13 @@ public class Constants {
         // either plug the encoder in or drop this to RUN_WITHOUT_ENCODER.
         public static final DcMotor.RunMode RUN_MODE = DcMotor.RunMode.RUN_USING_ENCODER;
 
-        //stick input deadzone
+        // The motor wiring is mirrored relative to the code's positive forward
+        // and clockwise-turn convention. Correct those axes at the drivetrain
+        // boundary so robot-centric, field-centric, and test OpModes agree.
+        // Strafing already matches the driver's commands.
+        public static final boolean INVERT_FORWARD = true;
+        public static final boolean INVERT_TURN = true;
         public static final double DEADZONE = 0.05;
-
         public static final boolean INVERT_STRAFE = false;
     }
 

@@ -24,15 +24,16 @@ public class Drivebase {
     }
 
     public void drive(double axial, double lateral, double yaw){
-        // Applied here rather than at the gamepad so field-centric gets the same
-        // correction — driveFieldCentric() rotates into the robot frame and then
-        // comes through this method.
+        // Applied here rather than at the gamepad so field-centric, autonomous,
+        // and every test OpMode use the same physical directions.
+        double forward = Constants.Drive.INVERT_FORWARD ? -axial : axial;
         double strafe = Constants.Drive.INVERT_STRAFE ? -lateral : lateral;
+        double turn = Constants.Drive.INVERT_TURN ? -yaw : yaw;
 
-        double flPower = axial + strafe + yaw;
-        double frPower = axial - strafe - yaw;
-        double blPower = axial - strafe + yaw;
-        double brPower = axial + strafe - yaw;
+        double flPower = forward + strafe + turn;
+        double frPower = forward - strafe - turn;
+        double blPower = forward - strafe + turn;
+        double brPower = forward + strafe - turn;
 
         double max = Math.max(1.0, Math.max(Math.abs(flPower),
                 Math.max(Math.abs(frPower),
