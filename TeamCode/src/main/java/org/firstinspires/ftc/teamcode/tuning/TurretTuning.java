@@ -21,4 +21,14 @@ public class TurretTuning {
     public static double kI = Constants.Turret.kI;
     public static double kD = Constants.Turret.kD;
     public static double kF = Constants.Turret.kF;
+
+    // Where "straight ahead" reads on the servo's feedback wire, in degrees.
+    // Jog this on Panels until parking actually lands the turret dead centre,
+    // then copy it back into Constants.Turret.ORIGIN_DEG.
+    public static double ORIGIN_DEG = Constants.Turret.ORIGIN_DEG;
+
+    // The return-to-origin park loop.
+    public static double RETURN_kP = Constants.Turret.RETURN_kP;
+    public static double MAX_RETURN_POWER = Constants.Turret.MAX_RETURN_POWER;
+    public static double RETURN_TOLERANCE_DEG = Constants.Turret.RETURN_TOLERANCE_DEG;
 }

@@ -86,6 +86,41 @@ public class Constants {
         public static final String SERVO = "turret";
         public static final DcMotorSimple.Direction DIRECTION = DcMotorSimple.Direction.FORWARD;
 
+        // The Axon MAX+ MK2's fourth wire: an ABSOLUTE analog position feedback
+        // of the servo's output shaft, 0 V at 0 degrees rising linearly to the
+        // channel's full scale (3.3 V) at 360. Wire it to an analog input on the
+        // hub and add it to the robot config as an "Analog Input" with this name.
+        //
+        // It reads true angle with no zeroing and no drift, which is what makes
+        // RETURN_TO_ORIGIN possible on a servo that otherwise has no idea where
+        // it is. Note it wraps at 360 -> 0, so all the maths below compares
+        // angles as a shortest-path difference, never as raw subtraction.
+        public static final String ENCODER = "turretEncoder";
+
+        // Raw feedback angle (degrees, straight off the wire) when the turret
+        // points straight ahead. MEASURE THIS: run "Turret PID Tuning", push the
+        // turret to dead centre by hand, and copy the reported raw angle here.
+        public static final double ORIGIN_DEG = 180.0;
+
+        // Return-to-origin loop. Proportional only — it's a park move, not a
+        // tracking one, so there's nothing to damp and no steady-state error
+        // worth integrating out.
+        public static final double RETURN_kP = 0.010;
+
+        // Cap the park speed. Lower than MAX_AIM_POWER because this runs
+        // unattended while the driver is doing something else.
+        public static final double MAX_RETURN_POWER = 0.35;
+
+        // Inside this many degrees of ORIGIN_DEG, we're home and stop.
+        public static final double RETURN_TOLERANCE_DEG = 2.0;
+
+        // If the turret runs AWAY from the origin when parking (error grows, it
+        // takes the long way round), flip this. Separate from INVERT_OUTPUT:
+        // that one is the camera's tx-vs-power sign, this is the feedback
+        // wire's angle-vs-power sign, and they're independent facts about how
+        // the servo and camera are each mounted.
+        public static final boolean INVERT_RETURN = false;
+
         // Aim loop runs on the Limelight's horizontal error (tx, in degrees) and
         // drives it to zero. Output is servo power. No feedforward (kF) because
         // the setpoint is tx = 0, and no integral (kI) because a turret that can

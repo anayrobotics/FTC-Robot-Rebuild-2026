@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.hardware;
 
+import com.qualcomm.robotcore.hardware.AnalogInput;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
@@ -26,6 +27,11 @@ public class Hardware {
 
     // Continuous-rotation servo that rotates the turret.
     public CRServo turret;
+
+    // The turret servo's position-feedback wire (Axon MAX+ MK2, fourth wire) on
+    // an analog input. Absolute shaft angle, which is what lets the turret park
+    // itself back at the origin.
+    public AnalogInput turretEncoder;
 
     // Positional servo that tilts the shooter hood (launch angle).
     public Servo hood;
@@ -75,6 +81,7 @@ public class Hardware {
         turret = hw.get(CRServo.class, Constants.Turret.SERVO);
         turret.setDirection(Constants.Turret.DIRECTION);
         turret.setPower(0);
+        turretEncoder = hw.get(AnalogInput.class, Constants.Turret.ENCODER);
 
         hood = hw.get(Servo.class, Constants.Hood.SERVO);
         hood.setDirection(Constants.Hood.DIRECTION);

@@ -55,6 +55,10 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
  *   <li><b>B</b> — reverse the indexer while held, to back a jam out.</li>
  *   <li><b>Dpad left / right</b> — override auto-aim and nudge the turret by
  *       hand while held; it resumes hunting the goal on release.</li>
+ *   <li><b>Dpad down</b> — park the turret back at its origin (straight ahead)
+ *       and hold it there, off the goal. Press again, or nudge it with dpad
+ *       left/right, to resume tracking. Use it before an endgame climb or to
+ *       unwind the turret; you can't shoot while parked.</li>
  * </ul>
  *
  * <p>REAL-LIFE WARNING: because the turret now tracks continuously rather than
@@ -80,6 +84,8 @@ public abstract class MecanumTeleOp extends OpMode {
 
     // Latched by the left bumper: is the shooter spun up and tracking range?
     private boolean revving = false;
+    // Latched by dpad down: hold the turret at its origin instead of tracking.
+    private boolean turretParked = false;
     // Latched by the right bumper. The spit-out trigger outranks it while held
     // without clearing it, so releasing the trigger resumes intaking.
     private boolean intakeLatched = false;
@@ -135,11 +141,22 @@ public abstract class MecanumTeleOp extends OpMode {
         // --- Turret: always hunting the goal ---
         // No aim button. Dpad left/right takes it over while held (for lining up
         // by eye if vision is out), and it goes straight back to tracking.
+        //
+        // Parking has to LATCH rather than run while held: auto-aim is the
+        // default every loop, so a momentary park would be dragged straight back
+        // to the goal the loop after you let go. Dpad down again — or any manual
+        // nudge — releases it back to tracking.
+        if (gamepad1.dpadDownWasPressed()) {
+            turretParked = !turretParked;
+        }
         if (gamepad1.dpad_left || gamepad1.dpad_right) {
+            turretParked = false;
             turret.setState(Turret.State.MANUAL);
             turret.setManualPower(gamepad1.dpad_left
                     ? -Constants.Turret.MANUAL_NUDGE_POWER
                     : Constants.Turret.MANUAL_NUDGE_POWER);
+        } else if (turretParked) {
+            turret.setState(Turret.State.RETURN_TO_ORIGIN);
         } else {
             turret.setState(Turret.State.AUTO_AIM);
         }
@@ -233,6 +250,8 @@ public abstract class MecanumTeleOp extends OpMode {
         }
         telemetry.addData("Turret", "%s%s", turret.getState(),
                 turret.isOnTarget() ? " — LOCKED" : "");
+        telemetry.addData("Turret angle", "%.1f deg (%+.1f from origin)",
+                turret.getAngleDeg(), turret.getOriginErrorDeg());
         telemetry.addData("Flywheel", "%.0f / %.0f rpm%s",
                 flywheel.getCurrentRpm(), flywheel.getTargetRpm(),
                 flywheel.atTargetRpm() ? " — at speed" : "");
@@ -253,6 +272,11 @@ public abstract class MecanumTeleOp extends OpMode {
         }
         if (ready) {
             return fire ? ">> FIRING" : ">> READY TO SHOOT — hold LT to fire";
+        }
+        if (turretParked) {
+            // Parked can't shoot: isOnTarget() is false outside AUTO_AIM. Say so
+            // rather than leaving the driver waiting on a lock that isn't coming.
+            return ">> REVVING — turret PARKED, dpad down to resume aiming";
         }
         if (!limelight.hasTarget()) {
             return ">> REVVING — no goal in view, drive until the tag shows";

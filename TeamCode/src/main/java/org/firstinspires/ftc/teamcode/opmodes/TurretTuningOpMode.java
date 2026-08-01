@@ -20,6 +20,17 @@ import org.firstinspires.ftc.teamcode.tuning.TurretTuning;
  * oscillation; leave kI at 0.
  *
  * <p>Requires a visible goal tag to move — with no target it deliberately stops.
+ *
+ * <h2>Measuring the turret origin</h2>
+ * This opmode also reports {@code rawAngleDeg} straight off the servo's
+ * feedback wire, which is how you set the park position up:
+ * <ol>
+ *   <li>Init (don't start — the turret stays put with the aim loop idle).</li>
+ *   <li>Push the turret to dead centre by hand.</li>
+ *   <li>Read {@code rawAngleDeg} and copy it into {@code TurretTuning.ORIGIN_DEG}
+ *       on Panels, then into {@link org.firstinspires.ftc.teamcode.Constants.Turret}
+ *       once it parks where you want.</li>
+ * </ol>
  */
 @TeleOp(name = "Turret PID Tuning", group = "Tuning")
 public class TurretTuningOpMode extends OpMode {
@@ -53,6 +64,10 @@ public class TurretTuningOpMode extends OpMode {
         panels.addData("tx", limelight.hasTarget() ? limelight.getTx() : 0.0);
         panels.addData("hasTarget", limelight.hasTarget());
         panels.addData("onTarget", turret.isOnTarget());
+        // Raw feedback angle — this is the number to read off when measuring
+        // ORIGIN_DEG. See the class docs.
+        panels.addData("rawAngleDeg", turret.getAngleDeg());
+        panels.addData("originErrorDeg", turret.getOriginErrorDeg());
         panels.addData("kP", TurretTuning.kP);
         panels.addData("kI", TurretTuning.kI);
         panels.addData("kD", TurretTuning.kD);
