@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.subsystems;
 
 import com.qualcomm.robotcore.hardware.AnalogInput;
 import com.qualcomm.robotcore.hardware.CRServo;
+import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.teamcode.Constants;
@@ -64,6 +65,23 @@ public class Turret implements Subsystem {
     // Set after an unwrap, cleared once travel is comfortably back inside the
     // limit. Stops a goal sitting right on the boundary from unwrapping forever.
     private boolean unwindGuarded = false;
+
+    // Stall watch for the park and unwrap moves: where the turret was when we
+    // last saw it make progress, how long ago that was, and whether we've given
+    // up on the current move.
+    private final ElapsedTime sinceProgress = new ElapsedTime();
+    private double progressReferenceDeg;
+    private boolean moveStalled = false;
+
+    /**
+     * Turret with no camera: manual nudging, parking, and the travel limit all
+     * work, but AUTO_AIM has nothing to aim at and holds still. Used by the
+     * bench tests so the turret can be checked out before the Limelight is
+     * wired, and so a camera fault can be ruled out of a turret problem.
+     */
+    public Turret(Hardware hardware) {
+        this(hardware, null);
+    }
 
     public Turret(Hardware hardware, Limelight limelight) {
         servo = hardware.turret;
@@ -145,6 +163,9 @@ public class Turret implements Subsystem {
             // the way back to AUTO_AIM would fling it somewhere arbitrary. The
             // limit check will simply start a fresh unwrap if one is still due.
             unwinding = false;
+            // A new move gets a fresh stall watch, and a fresh chance: a park
+            // that gave up should be retryable by asking for it again.
+            beginMove();
         }
         state = newState;
     }
@@ -158,13 +179,32 @@ public class Turret implements Subsystem {
     }
 
     // True only while auto-aiming AND locked onto the goal within tolerance.
-    // This is what the shooter logic gates firing on.
+    // This is what the shooter logic gates STARTING a shot on.
     public boolean isOnTarget() {
         return state == State.AUTO_AIM && onTarget;
     }
 
+    /**
+     * How far off the goal we are right now, in degrees, or a huge number when
+     * there is nothing to measure against.
+     *
+     * <p>Separate from {@link #isOnTarget()} because the two answer different
+     * questions. {@code isOnTarget} is a latched band, and the turret stops its
+     * servo the moment it's true — so the aim drifts back out, the servo nudges,
+     * and the flag flickers true/false around centre even with a perfectly
+     * steady robot. Gating a burst on that flicker slams the feed shut between
+     * every ball. Mid-burst, ask "how far off are we" against a wider band
+     * instead.
+     */
+    public double getAimErrorDeg() {
+        if (state != State.AUTO_AIM || unwinding || !hasTarget()) {
+            return Double.MAX_VALUE;
+        }
+        return Math.abs(limelight.getTx());
+    }
+
     public boolean hasTarget() {
-        return limelight.hasTarget();
+        return limelight != null && limelight.hasTarget();
     }
 
     @Override
@@ -213,18 +253,70 @@ public class Turret implements Subsystem {
         }
 
         // Let another unwrap arm itself once we're back well inside the limit.
-        if (unwindGuarded
+        //
+        // NOT while one is in progress. An unwrap swings from one limit through
+        // zero to the other, so it spends most of the move inside this band; if
+        // we cleared the guard here it would always be false by the time the
+        // swing landed, and a goal hovering near the boundary could unwrap, land
+        // on the opposite limit, unwrap straight back, and ping-pong forever
+        // instead of ever shooting. That is the exact failure the guard exists
+        // to prevent, so it has to survive the move that arms it.
+        if (unwindGuarded && !unwinding
                 && Math.abs(getTravelDeg())
-                    <= TurretTuning.MAX_TRAVEL_DEG - Constants.Turret.UNWIND_HYSTERESIS_DEG) {
+                    <= TurretTuning.MAX_TRAVEL_DEG - TurretTuning.UNWIND_HYSTERESIS_DEG) {
             unwindGuarded = false;
+            moveStalled = false;
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Stall detection, shared by the park and the unwrap.
+    //
+    // Both moves command the servo toward a travel target and have no way of
+    // knowing they've been blocked — by a mechanical stop inside the swing, by
+    // a cable snagging, or simply by a load the servo can't shift at this
+    // power. Left alone, driveToTravel() would hold that command against the
+    // obstruction for the rest of the match: the arrival test never passes, so
+    // for the unwrap `unwinding` never clears, aim() keeps returning early, and
+    // the robot can never shoot again. Meanwhile the servo cooks.
+    //
+    // So: if the angle stops changing while we're still asking for movement,
+    // give up, cut the power, and let telemetry say so.
+    // ------------------------------------------------------------------
+
+    private static final double STALL_PROGRESS_DEG = 3.0;
+    private static final double STALL_TIMEOUT_S = 0.75;
+
+    private void beginMove() {
+        progressReferenceDeg = getTravelDeg();
+        sinceProgress.reset();
+        moveStalled = false;
+    }
+
+    /** True once the current move has clearly stopped getting anywhere. */
+    private boolean checkStall() {
+        double travel = getTravelDeg();
+        if (Math.abs(travel - progressReferenceDeg) >= STALL_PROGRESS_DEG) {
+            progressReferenceDeg = travel;
+            sinceProgress.reset();
+            return false;
+        }
+        return sinceProgress.seconds() >= STALL_TIMEOUT_S;
+    }
+
+    /**
+     * True when a park or unwrap gave up because the turret stopped moving.
+     * Something is physically in the way — check it before running again.
+     */
+    public boolean isStalled() {
+        return moveStalled;
     }
 
     // Which way the shaft angle moves for a positive power. The park loop's
     // INVERT_RETURN is exactly this fact about the wiring, so reuse it.
     private static double angleRateSign(double power) {
         double sign = Math.signum(power);
-        return Constants.Turret.INVERT_RETURN ? -sign : sign;
+        return TurretTuning.INVERT_RETURN ? -sign : sign;
     }
 
     // True if this command would wind the turret further past its travel limit.
@@ -251,14 +343,18 @@ public class Turret implements Subsystem {
 
         // Negative sign: drive the error toward zero, i.e. an angle above the
         // target has to come back down.
-        double output = Range.clip(-error * TurretTuning.RETURN_kP, -maxPower, maxPower);
-        if (Constants.Turret.INVERT_RETURN) {
-            output = -output;
+        double direction = -error;
+        if (TurretTuning.INVERT_RETURN) {
+            direction = -direction;
         }
+        double output = Range.clip(direction * TurretTuning.RETURN_kP, -maxPower, maxPower);
         // Stiction floor — a command too small to break static friction would
-        // leave it parked just short of the target forever.
-        if (Math.abs(output) < Constants.Turret.MIN_AIM_POWER) {
-            output = Math.copySign(Constants.Turret.MIN_AIM_POWER, output);
+        // leave it parked just short of the target forever. Take the sign from
+        // the ERROR rather than the output: zero RETURN_kP on Panels makes the
+        // output exactly +0.0, and copySign reads that as positive, which would
+        // walk the turret off to its stop while you were mid-tune.
+        if (Math.abs(output) < TurretTuning.MIN_AIM_POWER) {
+            output = Math.copySign(TurretTuning.MIN_AIM_POWER, direction);
         }
         servo.setPower(output);
         return false;
@@ -269,7 +365,19 @@ public class Turret implements Subsystem {
     // so it works with no target in sight and knows when it has arrived instead
     // of guessing from a timer.
     private void returnToOrigin() {
-        driveToTravel(0.0, TurretTuning.MAX_RETURN_POWER);
+        if (moveStalled) {
+            // Already gave up on this park. Something is blocking the turret,
+            // and re-commanding it every loop would just grind.
+            servo.setPower(0);
+            return;
+        }
+        if (driveToTravel(0.0, TurretTuning.MAX_RETURN_POWER)) {
+            return;
+        }
+        if (checkStall()) {
+            moveStalled = true;
+            servo.setPower(0);
+        }
     }
 
     // Begin the full-turn swing to the same heading from the other side: a
@@ -282,6 +390,7 @@ public class Turret implements Subsystem {
         unwindGuarded = true;
         onTarget = false;
         controller.reset();
+        beginMove();
     }
 
     private void aim() {
@@ -289,15 +398,27 @@ public class Turret implements Subsystem {
         // we're deliberately swinging away from the goal.
         if (unwinding) {
             onTarget = false;
-            if (driveToTravel(unwindTargetDeg, Constants.Turret.MAX_UNWIND_POWER)) {
+            if (driveToTravel(unwindTargetDeg, TurretTuning.MAX_UNWIND_POWER)) {
                 unwinding = false;
                 controller.reset();
+                return;
+            }
+            if (checkStall()) {
+                // The swing is blocked — most likely the mechanical range is
+                // less than the full turn this move assumes. Abandon it. The
+                // guard stays set, so the next loop holds at the limit instead
+                // of immediately trying the identical swing again.
+                unwinding = false;
+                moveStalled = true;
+                controller.reset();
+                servo.setPower(0);
             }
             return;
         }
 
-        if (!limelight.hasTarget()) {
-            // No goal in view: stop and reset the loop. Do NOT keep driving —
+        if (!hasTarget()) {
+            // No goal in view (or no camera at all): stop and reset the loop. Do
+            // NOT keep driving —
             // a blind CRServo would sweep until it hits a hard stop or twists
             // the wiring.
             onTarget = false;
@@ -307,7 +428,7 @@ public class Turret implements Subsystem {
         }
 
         double tx = limelight.getTx();
-        onTarget = Math.abs(tx) <= Constants.Turret.AIM_TOLERANCE_DEG;
+        onTarget = Math.abs(tx) <= TurretTuning.AIM_TOLERANCE_DEG;
         if (onTarget) {
             // Close enough: stop so we don't buzz back and forth around center.
             controller.reset();
@@ -323,13 +444,19 @@ public class Turret implements Subsystem {
         // Setpoint is tx = 0; measurement is the current tx. The controller
         // returns a power whose sign turns us back toward center.
         double output = controller.calculate(0.0, tx);
-        output = Range.clip(output, -Constants.Turret.MAX_AIM_POWER, Constants.Turret.MAX_AIM_POWER);
-        if (Constants.Turret.INVERT_OUTPUT) {
+        output = Range.clip(output, -TurretTuning.MAX_AIM_POWER, TurretTuning.MAX_AIM_POWER);
+        // Which way "toward the target" is, independent of the gains. Used for
+        // the stiction floor below, because with kP zeroed on Panels — the
+        // normal first step of tuning — the output is exactly +0.0 and
+        // copySign would read that as positive and creep the turret away.
+        double direction = -tx;
+        if (TurretTuning.INVERT_OUTPUT) {
             output = -output;
+            direction = -direction;
         }
         // Floor small commands past the servo's stiction so it actually moves.
-        if (Math.abs(output) < Constants.Turret.MIN_AIM_POWER) {
-            output = Math.copySign(Constants.Turret.MIN_AIM_POWER, output);
+        if (Math.abs(output) < TurretTuning.MIN_AIM_POWER) {
+            output = Math.copySign(TurretTuning.MIN_AIM_POWER, direction);
         }
 
         // The aim is asking us to wind past a full turn. Take the same heading

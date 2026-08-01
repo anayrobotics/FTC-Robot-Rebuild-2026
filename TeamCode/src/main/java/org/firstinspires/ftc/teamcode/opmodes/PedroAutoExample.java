@@ -21,7 +21,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
  * <p>All poses are in PedroPathing field coordinates (inches, heading in
  * radians). Replace the poses below with your real field geometry.
  */
-@Autonomous(name = "Pedro Auto Example", group = "PedroPathing")
+@Autonomous(name = "Pedro Auto Example", group = "Auto")
 public class PedroAutoExample extends OpMode {
 
     private Follower follower;

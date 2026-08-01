@@ -15,6 +15,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Limelight;
 import org.firstinspires.ftc.teamcode.subsystems.Stopper;
 import org.firstinspires.ftc.teamcode.subsystems.Turret;
+import org.firstinspires.ftc.teamcode.tuning.TurretTuning;
 
 /**
  * Single-driver TeleOp: the whole robot on gamepad1, no operator.
@@ -61,10 +62,13 @@ import org.firstinspires.ftc.teamcode.subsystems.Turret;
  *       unwind the turret; you can't shoot while parked.</li>
  * </ul>
  *
- * <p>REAL-LIFE WARNING: because the turret now tracks continuously rather than
- * only while a button is held, it can chase the goal round in circles as you
- * drive. It has no travel limit in software — a mechanical hard stop or a slip
- * ring is what keeps it from twisting the wiring off.
+ * <p>Because the turret tracks continuously rather than only while a button is
+ * held, it would otherwise chase the goal round in circles as you drive. It is
+ * held to one turn of travel in software and unwraps itself at the limit (see
+ * {@link Turret}) — but that protection is built entirely on the servo's
+ * feedback wire. If that wire is disconnected the travel never appears to
+ * change, the limit never trips, and nothing stops the turret twisting its own
+ * loom off. Test 4a in "Robot Test" checks it; run that before trusting this.
  */
 public abstract class MecanumTeleOp extends OpMode {
     // Trigger past this counts as "held".
@@ -91,6 +95,9 @@ public abstract class MecanumTeleOp extends OpMode {
     private boolean intakeLatched = false;
     // Latched by A, same idea — outranked by the fire trigger and by B.
     private boolean indexerLatched = false;
+    // A burst in progress. Armed by READY, sustained on wider bands, dropped
+    // when the trigger is released. See the loop for why the two differ.
+    private boolean firing = false;
 
     // Last state actually commanded. Both desired states are recomputed from
     // scratch every loop, so these keep us from re-scheduling the same command
@@ -190,6 +197,28 @@ public abstract class MecanumTeleOp extends OpMode {
         boolean ready = turret.isOnTarget() && flywheel.atTargetRpm();
         boolean fire = gamepad1.left_trigger > TRIGGER_THRESHOLD;
 
+        // Starting a burst and continuing one are different questions, and
+        // asking the strict one twice is what makes a shooter feel broken.
+        //
+        // READY is deliberately tight: a 75 RPM window and a 1 degree lock. But
+        // a ball through the wheel costs a couple of hundred RPM, and the turret
+        // cuts its own servo the moment it's inside the lock band so the flag
+        // flickers anyway. Re-check READY every loop and the gate slams shut
+        // between every single shot, each time restarting its travel timer — so
+        // the driver holds the trigger and watches balls trickle out.
+        //
+        // So: READY arms the burst, and much wider bands sustain it. The shot
+        // still stops the instant the aim genuinely goes (target lost, turret
+        // parked or unwrapping, wheel really bogged down).
+        if (!fire) {
+            firing = false;
+        } else if (ready) {
+            firing = true;
+        }
+        boolean keepFiring = firing
+                && turret.getAimErrorDeg() <= Constants.Turret.KEEP_AIM_TOLERANCE_DEG
+                && flywheel.atTargetRpm(Constants.Flywheel.RPM_KEEP_TOLERANCE);
+
         // --- Intake: latching bumper, momentary spit ---
         if (gamepad1.rightBumperWasPressed()) {
             intakeLatched = !intakeLatched;
@@ -212,7 +241,7 @@ public abstract class MecanumTeleOp extends OpMode {
             indexerLatched = !indexerLatched;
         }
         Indexer.State wantIndexer;
-        if (fire && ready) {
+        if (keepFiring) {
             // Clear the gate first, and only feed once it has had time to
             // actually swing open — the servo has no position feedback, so
             // feeding immediately would ram a ball into a half-open stopper.
@@ -237,21 +266,33 @@ public abstract class MecanumTeleOp extends OpMode {
 
         scheduler.run();
 
+        // scheduler.run() just refreshed vision, so re-read the range rather
+        // than printing the value the control loop used above. Otherwise, on the
+        // frame a tag first appears, telemetry reads "Target visible: true" next
+        // to "Distance: -1.00" and sends you hunting a camera bug that isn't one.
+        double shownDistance = limelight.getDistanceMeters();
+
         // Shooter state first and loudest — this line is what the driver is
         // actually watching, and it says what to do next rather than making them
         // infer it from four separate readouts.
-        telemetry.addLine(shooterStatus(ready, fire));
+        telemetry.addLine(shooterStatus(ready, fire, keepFiring));
         telemetry.addLine();
         telemetry.addData("Aiming at", targetName());
         telemetry.addData("Target visible", limelight.hasTarget());
         if (limelight.hasTarget()) {
             telemetry.addData("tx (deg)", "%.2f", limelight.getTx());
-            telemetry.addData("Distance (m)", "%.2f", distance);
+            telemetry.addData("Distance (m)", "%.2f", shownDistance);
         }
         telemetry.addData("Turret", "%s%s", turret.getState(),
                 turret.isOnTarget() ? " — LOCKED" : "");
+        if (turret.isStalled()) {
+            telemetry.addLine("!! TURRET BLOCKED — it gave up moving. Check for a snag.");
+        }
+        // Read the limit from TurretTuning, not Constants: the turret enforces
+        // the live value, and telemetry that quotes a different number than the
+        // code obeys is worse than no telemetry.
         telemetry.addData("Turret wind", "%+.0f deg of %.0f%s",
-                turret.getTravelDeg(), Constants.Turret.MAX_TRAVEL_DEG,
+                turret.getTravelDeg(), TurretTuning.MAX_TRAVEL_DEG,
                 turret.isUnwinding() ? " — UNWRAPPING" : "");
         telemetry.addData("Flywheel", "%.0f / %.0f rpm%s",
                 flywheel.getCurrentRpm(), flywheel.getTargetRpm(),
@@ -267,12 +308,23 @@ public abstract class MecanumTeleOp extends OpMode {
 
     // One line telling the driver where the shot is and what to press. Ordered
     // by what's blocking the shot, most fundamental first.
-    private String shooterStatus(boolean ready, boolean fire) {
+    private String shooterStatus(boolean ready, boolean fire, boolean keepFiring) {
         if (!revving) {
             return ">> IDLE — press LB to rev up";
         }
+        // Check the burst first. Mid-burst the strict READY flag dips on every
+        // ball, and falling through to "aiming..." while balls are visibly
+        // leaving the robot reads as a fault when nothing is wrong.
+        if (keepFiring) {
+            return ">> FIRING";
+        }
         if (ready) {
             return fire ? ">> FIRING" : ">> READY TO SHOOT — hold LT to fire";
+        }
+        if (turret.isStalled()) {
+            // The turret tried to move and couldn't, and has cut power rather
+            // than grinding. Nothing the driver presses fixes that.
+            return ">> REVVING — TURRET BLOCKED, something is snagging it";
         }
         if (turret.isUnwinding()) {
             // A full-turn swing off the goal and back. Say so, or it reads as
@@ -303,10 +355,13 @@ public abstract class MecanumTeleOp extends OpMode {
     public void stop(){
         scheduler.cancelAll();
         drivebase.stop();
+        // The scheduler is already cancelled, so push each safe state to the
+        // hardware ourselves — stop() only sets a field, and the periodic()
+        // that would normally write it is never going to run.
         flywheel.stop();
+        flywheel.periodic();
         hood.stop();
-        // The scheduler is already cancelled, so push the closed position to the
-        // servo ourselves rather than waiting for a periodic() that won't come.
+        hood.periodic();
         stopper.stop();
         stopper.periodic();
         turret.stop();

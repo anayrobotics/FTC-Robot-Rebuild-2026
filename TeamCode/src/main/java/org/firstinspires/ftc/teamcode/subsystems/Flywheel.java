@@ -31,7 +31,7 @@ public class Flywheel implements Subsystem {
         // Only reset the loop on a real setpoint jump (e.g. a preset press). Auto-
         // ranging nudges the target a few RPM every loop as the distance estimate
         // jitters; resetting on those tiny changes would wipe the D term each loop.
-        if (Math.abs(clamped - targetRpm) > Constants.Flywheel.RPM_TOLERANCE) {
+        if (Math.abs(clamped - targetRpm) > Constants.Flywheel.SETPOINT_JUMP_RPM) {
             controller.reset();
         }
         targetRpm = clamped;
@@ -50,9 +50,19 @@ public class Flywheel implements Subsystem {
         return currentRpm;
     }
 
+    /** At speed, and therefore ready to START a shot. */
     public boolean atTargetRpm() {
-        return targetRpm > 0
-                && Math.abs(targetRpm - currentRpm) <= Constants.Flywheel.RPM_TOLERANCE;
+        return atTargetRpm(Constants.Flywheel.RPM_TOLERANCE);
+    }
+
+    /**
+     * At speed within a caller-chosen band. Use the wide
+     * {@link Constants.Flywheel#RPM_KEEP_TOLERANCE} to decide whether a burst
+     * already running should keep feeding — the dip from a ball going through
+     * the wheel is far outside the band that starts one.
+     */
+    public boolean atTargetRpm(double toleranceRpm) {
+        return targetRpm > 0 && Math.abs(targetRpm - currentRpm) <= toleranceRpm;
     }
 
     // Auto-ranging: given a distance to the goal (meters, e.g. from the

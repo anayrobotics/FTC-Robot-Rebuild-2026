@@ -20,6 +20,15 @@ public class Constants {
 
         public static final DcMotor.ZeroPowerBehavior ZERO_POWER_BEHAVIOR = DcMotor.ZeroPowerBehavior.BRAKE;
 
+        // RUN_USING_ENCODER gives smoother, more repeatable driving — but ONLY if
+        // all four drive motors have their encoder cables plugged in. With a
+        // cable missing, that motor reads zero velocity, the hub's internal
+        // velocity loop pins it to full power, and the robot veers hard.
+        //
+        // If the Drive Motor Check test shows a motor whose ticks never change,
+        // either plug the encoder in or drop this to RUN_WITHOUT_ENCODER.
+        public static final DcMotor.RunMode RUN_MODE = DcMotor.RunMode.RUN_USING_ENCODER;
+
         //stick input deadzone
         public static final double DEADZONE = 0.05;
     }
@@ -58,8 +67,23 @@ public class Constants {
         public static final double kD = 0.00001;
         public static final double kF = 1.0 / MAX_RPM;
 
-        // Considered "at target" within this many RPM.
+        // Considered "at target", and therefore ready to START a shot, within
+        // this many RPM.
         public static final double RPM_TOLERANCE = 75.0;
+
+        // The band that KEEPS a burst feeding once it has started. Much wider,
+        // and it has to be: putting a ball through the wheel drops it by a
+        // couple of hundred RPM, which is far outside RPM_TOLERANCE. Gate the
+        // feed on the start band and every single shot slams the stopper shut
+        // and pays its travel time again on the way back — you get a fraction
+        // of the fire rate for no accuracy gain, because the wheel has already
+        // recovered most of the way by the time the next ball reaches it.
+        public static final double RPM_KEEP_TOLERANCE = 400.0;
+
+        // A setpoint change smaller than this is auto-ranging jitter, not a new
+        // shot, so the PID keeps its history. Separate from RPM_TOLERANCE so
+        // tightening the at-speed band doesn't also make the loop reset more.
+        public static final double SETPOINT_JUMP_RPM = 300.0;
 
         // Preset shooting speed (fallback when no target is visible for ranging).
         public static final double SHOOT_RPM = 3500.0;
@@ -161,6 +185,14 @@ public class Constants {
         // Inside this many degrees we consider ourselves aimed and stop moving,
         // which kills the servo jitter you'd otherwise get right at center.
         public static final double AIM_TOLERANCE_DEG = 1.0;
+
+        // The band that KEEPS a burst feeding once it has started, the same idea
+        // as Flywheel.RPM_KEEP_TOLERANCE. Because the turret cuts its servo the
+        // instant it's inside AIM_TOLERANCE_DEG, the aim drifts back out, the
+        // servo nudges, and the lock flag flickers on and off around centre even
+        // with a stationary robot. That flicker is not a real loss of aim, and
+        // stopping the feed for it costs a shot every time.
+        public static final double KEEP_AIM_TOLERANCE_DEG = 3.0;
 
         // Cap the aim speed so the turret slews smoothly instead of slamming.
         public static final double MAX_AIM_POWER = 0.6;

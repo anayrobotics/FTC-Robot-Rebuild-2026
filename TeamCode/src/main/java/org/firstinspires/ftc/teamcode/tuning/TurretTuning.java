@@ -36,4 +36,26 @@ public class TurretTuning {
     // 180 = one full turn of total travel. Lower it if the wiring says so;
     // raising it past 180 lets the turret wind more than a turn.
     public static double MAX_TRAVEL_DEG = Constants.Turret.MAX_TRAVEL_DEG;
+    public static double MAX_UNWIND_POWER = Constants.Turret.MAX_UNWIND_POWER;
+    public static double UNWIND_HYSTERESIS_DEG = Constants.Turret.UNWIND_HYSTERESIS_DEG;
+
+    // If the turret drives AWAY from the target when auto-aiming, flip this.
+    // (Camera-mounting sign: tx versus servo power.)
+    public static boolean INVERT_OUTPUT = Constants.Turret.INVERT_OUTPUT;
+
+    // If the turret runs AWAY from the origin when parking, flip this.
+    // (Servo-gearing sign: feedback angle versus servo power.) Independent of
+    // INVERT_OUTPUT — they are two separate facts about how the robot is built.
+    public static boolean INVERT_RETURN = Constants.Turret.INVERT_RETURN;
+
+    // Aim loop shaping. AIM_TOLERANCE_DEG and MIN_AIM_POWER interact: if the
+    // smallest power the servo will accept swings the turret further than the
+    // tolerance band is wide, it can never settle, and it will hunt back and
+    // forth across the target forever. Widen the band or lower the floor.
+    public static double AIM_TOLERANCE_DEG = Constants.Turret.AIM_TOLERANCE_DEG;
+    public static double MAX_AIM_POWER = Constants.Turret.MAX_AIM_POWER;
+    public static double MIN_AIM_POWER = Constants.Turret.MIN_AIM_POWER;
+
+    // Speed of a manual dpad nudge.
+    public static double MANUAL_NUDGE_POWER = Constants.Turret.MANUAL_NUDGE_POWER;
 }

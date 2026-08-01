@@ -17,6 +17,14 @@ public class PIDFController {
     }
 
     public void setCoefficients(double kP, double kI, double kD, double kF) {
+        // Turning the integral on or off starts it from scratch. Every loop in
+        // this robot ships with kI = 0, and the tuning OpModes invite you to
+        // raise it live — if the accumulator had been quietly running unused all
+        // along, typing a gain in would apply thirty seconds of stored error in
+        // a single frame and slam whatever it drives.
+        if (kI != this.kI) {
+            integral = 0;
+        }
         this.kP = kP;
         this.kI = kI;
         this.kD = kD;
@@ -31,7 +39,11 @@ public class PIDFController {
         double error = target - measured;
         double derivative = 0;
         if (dt > 0) {
-            integral += error * dt;
+            // Only accumulate while the term is actually in use — see
+            // setCoefficients().
+            if (kI != 0) {
+                integral += error * dt;
+            }
             derivative = (error - lastError) / dt;
         }
         lastError = error;

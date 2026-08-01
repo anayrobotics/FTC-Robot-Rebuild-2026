@@ -3,11 +3,14 @@ package org.firstinspires.ftc.teamcode.subsystems;
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.Constants;
 import org.firstinspires.ftc.teamcode.commands.Subsystem;
 import org.firstinspires.ftc.teamcode.hardware.Hardware;
+import org.firstinspires.ftc.teamcode.tuning.VisionTuning;
 
+import java.util.ArrayList;
 import java.util.List;
 
 // Thin wrapper around the Limelight 3A. It polls the camera once per loop in
@@ -28,6 +31,11 @@ public class Limelight implements Subsystem {
     private boolean hasTarget = false;
     private double tx = 0;   // horizontal angle to target, degrees (+ = right)
     private double ty = 0;   // vertical angle to target, degrees (+ = up)
+
+    // Diagnostics only: every tag id in the frame, and how long since the camera
+    // last gave us a valid one.
+    private final List<Integer> visibleTagIds = new ArrayList<>();
+    private final ElapsedTime sinceValidResult = new ElapsedTime();
 
     public Limelight(Hardware hardware) {
         limelight = hardware.limelight;
@@ -63,13 +71,30 @@ public class Limelight implements Subsystem {
         if (!hasTarget) {
             return -1;
         }
-        double angleRad = Math.toRadians(Constants.Vision.CAMERA_MOUNT_ANGLE_DEG + ty);
+        // Geometry is read live from VisionTuning so it can be calibrated against
+        // a tape measure at the field without a re-deploy.
+        double angleRad = Math.toRadians(VisionTuning.CAMERA_MOUNT_ANGLE_DEG + ty);
         double tan = Math.tan(angleRad);
         if (tan <= 1e-6) {
             return -1;
         }
-        double heightDelta = Constants.Vision.GOAL_TAG_HEIGHT_M - Constants.Vision.CAMERA_HEIGHT_M;
+        double heightDelta = VisionTuning.GOAL_TAG_HEIGHT_M - VisionTuning.CAMERA_HEIGHT_M;
         return heightDelta / tan;
+    }
+
+    /**
+     * Every AprilTag id seen on the most recent frame, target or not. Only used
+     * for diagnostics — when the goal tag isn't being picked up, this is what
+     * tells you whether the camera sees nothing at all (pipeline / exposure /
+     * range problem) or sees tags but not the one we asked for (wrong id).
+     */
+    public List<Integer> getVisibleTagIds() {
+        return visibleTagIds;
+    }
+
+    /** Age of the last valid frame, in ms. Large or frozen means a dropped feed. */
+    public double getStalenessMs() {
+        return sinceValidResult.milliseconds();
     }
 
     @Override
@@ -81,6 +106,7 @@ public class Limelight implements Subsystem {
         // dropped) or an invalid/empty result, hasTarget stays false and the
         // turret will hold still instead of chasing stale data.
         hasTarget = false;
+        visibleTagIds.clear();
 
         if (result == null || !result.isValid()) {
             return;
@@ -91,15 +117,17 @@ public class Limelight implements Subsystem {
             return;
         }
 
+        sinceValidResult.reset();
+
         // Pick out OUR goal tag specifically. result.getTx() would give whatever
         // tag the Limelight considers primary, which may be the wrong goal or an
         // obelisk motif tag, so we match on id instead.
         for (LLResultTypes.FiducialResult fr : fiducials) {
+            visibleTagIds.add(fr.getFiducialId());
             if (fr.getFiducialId() == targetTagId) {
                 tx = fr.getTargetXDegrees();
                 ty = fr.getTargetYDegrees();
                 hasTarget = true;
-                return;
             }
         }
     }

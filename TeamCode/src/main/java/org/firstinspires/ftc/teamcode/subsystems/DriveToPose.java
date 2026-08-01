@@ -19,7 +19,7 @@ import org.firstinspires.ftc.teamcode.util.PIDFController;
  *
  * <p>Gains are pulled live from {@link DriveTuning} every {@link #update} so
  * edits made on the Panels dashboard apply immediately (see
- * {@link org.firstinspires.ftc.teamcode.opmodes.DriveToPoseTuningOpMode}). This
+ * the "Drive To Pose" test in {@code RobotTest}). This
  * class owns no pose source of its own — the caller supplies the current pose
  * (the tuning OpMode reads it from PedroPathing's localizer).
  */
@@ -76,7 +76,16 @@ public class DriveToPose {
         // error is exactly the error we computed above (kF term is 0).
         double axial = forwardPid.calculate(forwardError, 0);
         double lateral = strafePid.calculate(strafeError, 0);
-        double yaw = headingPid.calculate(headingError, 0);
+
+        // NEGATED, and this is not a preference. headingError is CCW-positive,
+        // because that is what both PedroPathing poses and the navX report. But
+        // Drivebase.drive()'s yaw is CW-positive — it is wired to the driver's
+        // right stick, where pushing right turns right. Feed a CCW error
+        // straight in and every heading correction is applied backwards: the
+        // error grows instead of shrinking, wraps at +/-pi, and the robot spins
+        // on the spot rather than settling. Forward and strafe need no such
+        // flip; those two frames already agree.
+        double yaw = -headingPid.calculate(headingError, 0);
 
         if (Constants.DriveToPose.INVERT_FORWARD) axial = -axial;
         if (Constants.DriveToPose.INVERT_STRAFE) lateral = -lateral;

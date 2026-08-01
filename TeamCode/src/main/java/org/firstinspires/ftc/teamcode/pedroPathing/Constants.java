@@ -5,6 +5,7 @@ import com.pedropathing.follower.FollowerConstants;
 import com.pedropathing.ftc.FollowerBuilder;
 import com.pedropathing.ftc.drivetrains.MecanumConstants;
 import com.pedropathing.ftc.localization.Encoder;
+import com.pedropathing.ftc.localization.constants.DriveEncoderConstants;
 import com.pedropathing.ftc.localization.constants.TwoWheelConstants;
 import com.pedropathing.paths.PathConstraints;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
@@ -19,8 +20,21 @@ import org.firstinspires.ftc.teamcode.localization.NavXIMU;
  *
  * <p>This wires the follower to the SAME motor configuration names and
  * directions our TeleOp already uses (see {@link org.firstinspires.ftc.teamcode.Constants.Drive}
- * and {@code Hardware}/{@code Drivebase}), and uses the four drive-motor
- * encoders for localization since the robot has no dedicated odometry pods.
+ * and {@code Hardware}/{@code Drivebase}).
+ *
+ * <h2>Which localizer</h2>
+ * {@link #USE_ODOMETRY_PODS} picks between the two. It is <b>false</b> today
+ * because the robot has no pods fitted: the two-wheel localizer would ask the
+ * hardware map for {@code forwardOdo} and {@code strafeOdo}, not find them, and
+ * throw — which takes down every OpMode that builds a follower (Drive To Pose,
+ * Pedro Auto, and PedroPathing's own Tuning menu) at init.
+ *
+ * <p>With it false we localize off the four drive-motor encoders instead. That
+ * needs no hardware we don't already have, but it is materially worse: wheel
+ * slip goes straight into the pose estimate, and heading is derived from the
+ * left/right wheel difference rather than read off the navX, so it drifts.
+ * Good enough to bring drive-to-pose up on the bench; not good enough for a
+ * real autonomous. Flip the flag the day the pods are on the robot.
  *
  * <p><b>TUNING REQUIRED.</b> The values marked {@code TODO tune} below are
  * PedroPathing defaults / rough guesses. Paths will only be accurate after you
@@ -28,6 +42,9 @@ import org.firstinspires.ftc.teamcode.localization.NavXIMU;
  * numbers back here. See https://pedropathing.com/docs/pathing/tuning .
  */
 public class Constants {
+
+    /** True once the dead-wheel odometry pods are fitted and configured. */
+    public static final boolean USE_ODOMETRY_PODS = false;
 
     // ------------------------------------------------------------------
     // Follower (mass + zero-power decel used by the path controller).
@@ -54,15 +71,41 @@ public class Constants {
             .yVelocity(45.0);
 
     // ------------------------------------------------------------------
-    // Localizer: two dead-wheel odometry pods for translation + the navX2 for
-    // heading (via NavXIMU). Far more accurate than drive encoders, and the
-    // heading matches the field-centric drive since both read the same navX.
+    // Fallback localizer: the four drive-motor encoders. In use while
+    // USE_ODOMETRY_PODS is false.
+    // ------------------------------------------------------------------
+    public static DriveEncoderConstants driveEncoderLocalizerConstants = new DriveEncoderConstants()
+            .leftFrontMotorName(Drive.FRONT_LEFT)
+            .leftRearMotorName(Drive.BACK_LEFT)
+            .rightFrontMotorName(Drive.FRONT_RIGHT)
+            .rightRearMotorName(Drive.BACK_RIGHT)
+            // Which way each ENCODER counts — a different question from which way
+            // the motor is wired. If pushing the robot forward makes the reported
+            // X go down in the Localization Test, flip all four.
+            .leftFrontEncoderDirection(Encoder.REVERSE)
+            .leftRearEncoderDirection(Encoder.REVERSE)
+            .rightFrontEncoderDirection(Encoder.FORWARD)
+            .rightRearEncoderDirection(Encoder.FORWARD)
+            // TODO tune: run PedroPathing's Forward / Lateral / Turn tuners.
+            .forwardTicksToInches(0.0029)
+            .strafeTicksToInches(0.0029)
+            .turnTicksToInches(0.0029)
+            // TODO measure: track width and wheelbase, in inches.
+            .robotWidth(14.0)
+            .robotLength(14.0);
+
+    // ------------------------------------------------------------------
+    // Preferred localizer: two dead-wheel odometry pods for translation + the
+    // navX2 for heading (via NavXIMU). Far more accurate than drive encoders,
+    // and the heading matches field-centric drive since both read the same navX.
+    //
+    // NOT IN USE until USE_ODOMETRY_PODS is set true.
     //
     // Pod encoders plug into (unused) motor encoder ports; the names below are
     // the CONFIG NAMES of whatever ports the pods are wired to. Directions,
     // pod offsets, and ticks-to-inches all need on-robot tuning.
     // ------------------------------------------------------------------
-    public static TwoWheelConstants localizerConstants = new TwoWheelConstants()
+    public static TwoWheelConstants podLocalizerConstants = new TwoWheelConstants()
             // TODO set: config names of the two ports the odometry pods plug into.
             .forwardEncoder_HardwareMapName("forwardOdo")
             .strafeEncoder_HardwareMapName("strafeOdo")
@@ -88,10 +131,22 @@ public class Constants {
 
     /** Builds a fully-configured {@link Follower} for the current OpMode. */
     public static Follower createFollower(HardwareMap hardwareMap) {
-        return new FollowerBuilder(followerConstants, hardwareMap)
+        FollowerBuilder builder = new FollowerBuilder(followerConstants, hardwareMap)
                 .mecanumDrivetrain(driveConstants)
-                .twoWheelLocalizer(localizerConstants)
-                .pathConstraints(pathConstraints)
-                .build();
+                .pathConstraints(pathConstraints);
+
+        if (USE_ODOMETRY_PODS) {
+            builder.twoWheelLocalizer(podLocalizerConstants);
+        } else {
+            builder.driveEncoderLocalizer(driveEncoderLocalizerConstants);
+        }
+
+        return builder.build();
+    }
+
+    /** Human-readable name of the localizer currently in use, for telemetry. */
+    public static String localizerName() {
+        return USE_ODOMETRY_PODS ? "two-wheel odometry pods + navX"
+                                 : "drive encoders (no pods — expect drift)";
     }
 }
