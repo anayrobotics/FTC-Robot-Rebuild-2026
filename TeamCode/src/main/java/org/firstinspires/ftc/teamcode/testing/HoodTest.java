@@ -119,7 +119,7 @@ public class HoodTest extends OpMode {
 
         hood.periodic();
 
-        boolean clamped = false;//Math.abs(hood.getTargetPosition() - hood.getCommandedPosition()) > 1e-6;
+        boolean clamped = Math.abs(hood.getTargetPosition() - hood.getCommandedPosition()) > 1e-6;
 
         telemetry.addData(">> Power", hood.isPwmEnabled()
                 ? "LIVE — Y cuts it the instant it buzzes"
