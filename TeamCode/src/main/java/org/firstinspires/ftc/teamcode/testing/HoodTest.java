@@ -97,7 +97,7 @@ public class HoodTest extends OpMode {
 
         hood.periodic();
 
-        boolean clamped = Math.abs(hood.getTargetPosition() - hood.getCommandedPosition()) > 1e-6;
+        boolean clamped = false;//Math.abs(hood.getTargetPosition() - hood.getCommandedPosition()) > 1e-6;
 
         telemetry.addData(">> Commanded", "%.3f%s", hood.getCommandedPosition(),
                 clamped ? "  (CLAMPED — asked for " + String.format("%.3f", hood.getTargetPosition()) + ")" : "");
