@@ -24,10 +24,15 @@ public class Drivebase {
     }
 
     public void drive(double axial, double lateral, double yaw){
-        double flPower = axial + lateral + yaw;
-        double frPower = axial - lateral - yaw;
-        double blPower = axial - lateral + yaw;
-        double brPower = axial + lateral - yaw;
+        // Applied here rather than at the gamepad so field-centric gets the same
+        // correction — driveFieldCentric() rotates into the robot frame and then
+        // comes through this method.
+        double strafe = Constants.Drive.INVERT_STRAFE ? -lateral : lateral;
+
+        double flPower = axial + strafe + yaw;
+        double frPower = axial - strafe - yaw;
+        double blPower = axial - strafe + yaw;
+        double brPower = axial + strafe - yaw;
 
         double max = Math.max(1.0, Math.max(Math.abs(flPower),
                 Math.max(Math.abs(frPower),
@@ -73,6 +78,13 @@ public class Drivebase {
 
     public void resetHeading(){
         heading.resetYaw();
+    }
+
+    // Declares the robot's current heading (CCW-positive radians) rather than
+    // assuming it's zero — for an auto that starts pointed somewhere other than
+    // downfield. resetHeading() is this with 0.
+    public void setHeading(double headingRad){
+        heading.setHeading(headingRad);
     }
 
     public void stop(){
