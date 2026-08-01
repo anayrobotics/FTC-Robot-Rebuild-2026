@@ -71,7 +71,9 @@ public class NavXIMU implements CustomIMU {
     public void resetYaw() {
         yawOffsetRad = readRawYawRad();
     }
-
+    public void setHeading(double headingRad) {
+        yawOffsetRad = readRawYawRad() - headingRad;
+    }
     private double readRawYawRad() {
         // firstAngle of an INTRINSIC ZYX decomposition is yaw (rotation about Z).
         Orientation o = gyro.getAngularOrientation(
