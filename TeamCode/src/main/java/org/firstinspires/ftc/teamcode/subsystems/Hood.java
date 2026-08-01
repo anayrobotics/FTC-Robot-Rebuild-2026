@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.subsystems;
 
+import com.qualcomm.robotcore.hardware.PwmControl;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.Range;
 
@@ -24,9 +25,39 @@ public class Hood implements Subsystem {
     // target immediately.
     private double targetPosition;
 
+    // Whether periodic() is allowed to drive the servo at all. Match OpModes
+    // leave this on; the bench tests start it OFF so the hood stays limp until
+    // someone has looked at the linkage. See setPwmEnabled().
+    private boolean pwmEnabled = true;
+
+    // What we last actually told the hub, so a disable is sent once on the
+    // transition instead of every loop.
+    private boolean pwmApplied = true;
+
     public Hood(Hardware hardware) {
         servo = hardware.hood;
         targetPosition = Constants.Hood.DEFAULT_POSITION;
+    }
+
+    /**
+     * Energize or cut the hood servo.
+     *
+     * <p>Disabling is a real PWM cut, not a "hold position 0" — the servo goes
+     * limp and you can move the hood by hand. That makes it the recovery for a
+     * hood stalled against a mechanical stop: kill it from the gamepad instead
+     * of power-cycling the robot.
+     *
+     * <p>It has to live here, in the one place that writes the servo, because
+     * {@code setPosition()} silently re-enables PWM on a REV hub — a bare
+     * {@code setPwmDisable()} from an OpMode would be undone by the very next
+     * {@code periodic()}. So while this is off, periodic() writes nothing.
+     */
+    public void setPwmEnabled(boolean enabled) {
+        pwmEnabled = enabled;
+    }
+
+    public boolean isPwmEnabled() {
+        return pwmEnabled;
     }
 
     // Command a raw servo position (0..1). The actual value written is clamped
@@ -85,6 +116,22 @@ public class Hood implements Subsystem {
 
     @Override
     public void periodic() {
+        if (!pwmEnabled) {
+            // Cut the pulse once, then write nothing — setPosition() would turn
+            // the PWM straight back on and undo the disable.
+            if (pwmApplied) {
+                if (servo instanceof PwmControl) {
+                    ((PwmControl) servo).setPwmDisable();
+                }
+                pwmApplied = false;
+            }
+            return;
+        }
+
+        // No explicit re-enable needed on the way back: the hub auto-enables
+        // PWM on any pulse-width write, so setPosition() below does it.
+        pwmApplied = true;
+
         // Clamp against the LIVE bounds (from HoodTuning) so a bad preset or a
         // stale auto-range value can never drive the linkage past its stops.
         servo.setPosition(Range.clip(targetPosition,

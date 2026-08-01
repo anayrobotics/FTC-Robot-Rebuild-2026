@@ -196,13 +196,20 @@ watch the dip on the Panels graph.
 ### 3b — Hood Angle
 
 **Run:** `3 - Shooter → 3b Hood Angle` · **hand on the stop button.**
-Bumpers ±0.01 · dpad up/down ±0.05 · **X** near · **B** far · **Y** stow ·
-**A** store as MIN · **dpad right** store as MAX.
+**Y** cut/restore hood power · bumpers ±0.01 · dpad up/down ±0.05 · **X** near ·
+**B** far · **dpad left** stow · **A** store as MIN · **dpad right** store as MAX.
 
-**Find the mechanical limits first, carefully.** Start at the stowed default and
+**The hood starts limp.** Nothing energizes the servo until you press **Y**. Move
+the hood through its travel by hand first — that costs you nothing and tells you
+roughly where the stops are before the servo ever holds torque against one. **Y**
+again is the kill: a real PWM cut, so a buzzing servo is recovered from the
+gamepad instead of by power-cycling the robot.
+
+**Then find the mechanical limits, carefully.** Arm it (it comes up mid-band) and
 nudge outward **one 0.01 step at a time**, listening. The moment the servo buzzes
-or the linkage stops moving, you've gone one step too far — back off two and store
-that as the limit. Do both ends, then copy MIN/MAX into `Constants.Hood`.
+or the linkage stops moving, you've gone one step too far — hit **Y**, back off
+two, and store that as the limit. Do both ends, then copy MIN/MAX into
+`Constants.Hood`.
 
 > A positional servo asked past its stop doesn't give up. It holds full torque
 > until something strips. Servos are the part most likely to die quietly on a test
@@ -211,9 +218,18 @@ that as the limit. Do both ends, then copy MIN/MAX into `Constants.Hood`.
 
 Shot angles come later, in 6a, once you're shooting at a real goal.
 
-> **Note:** `Hardware.initHood()` commands `DEFAULT_POSITION` (0.15) the instant
-> you press INIT, before you can jog anything. Check by hand that the linkage can
-> reach 0.15 before running this the first time.
+> **`DEFAULT_POSITION` is `MIN_POSITION`.** They are the same constant, so a hood
+> parked at the stowed default is sitting exactly on the bottom clamp: every
+> downward nudge clips back to the same number, the servo never moves, and the
+> hood reads as dead when nothing is wrong with it. Both hood tests now arm
+> mid-band to dodge this. If you see `CLAMPED` in telemetry, that's what it is.
+>
+> **`initHood()` no longer commands a position.** It used to drive to 0.15 the
+> instant you pressed INIT — which energized the servo before anyone could check
+> the linkage, and left it stalled at full torque for as long as you sat on the
+> INIT screen if 0.15 was past the stop. The hub boots servos with PWM off, so
+> not commanding one keeps it limp until an OpMode's `periodic()` takes over at
+> PLAY.
 
 ---
 
@@ -223,7 +239,9 @@ Shot angles come later, in 6a, once you're shooting at a real goal.
 **A** toggles the flywheel · right stick up/down ramps the target RPM ·
 **RB** intake in · **RT** intake out · **LB** indexer feed · **LT** indexer reverse ·
 dpad left/right hood ∓0.01 · dpad up/down hood ±0.05 · **X** near · **B** far ·
-**Y** stow. Only the flywheel latches.
+**Y** cut/restore hood power. Only the flywheel and the hood power latch.
+
+The hood starts limp here too, and arms mid-band. **Y** is the kill switch.
 
 Intake, indexer, both flywheels and the hood in one OpMode. 2a/3a/3b each proved
 one mechanism alone, which finds a miswired motor but tells you nothing about four
@@ -457,7 +475,8 @@ you pick, so you can't start aimed at the wrong goal.
 | Field-centric mirrored | 1b — press X |
 | Motor screams / huge current | 3a — flywheel reversal |
 | RPM number implausible | 3a — `TICKS_PER_REV` |
-| Servo buzzing | Past its stop — 2b / 3b |
+| Servo buzzing | Past its stop — 2b / 3b. **Y** kills hood power |
+| Hood won't move, or only one way | Sitting on the MIN/MAX clamp — 3b |
 | Turret winds up its wiring | 4a — dead feedback wire |
 | Turret runs away | 4a `INVERT_RETURN` / 5b `INVERT_OUTPUT` |
 | Turret hunts at centre | 5b — `MIN_AIM_POWER` vs `AIM_TOLERANCE_DEG` |

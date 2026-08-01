@@ -134,8 +134,15 @@ public class Hardware {
     public void initHood(HardwareMap hw){
         hood = hw.get(Servo.class, Constants.Hood.SERVO);
         hood.setDirection(Constants.Hood.DIRECTION);
-        // Start stowed so the hood doesn't slam to a random angle on init.
-        hood.setPosition(Constants.Hood.DEFAULT_POSITION);
+        // Deliberately NOT commanded to a position here. The hub powers servos
+        // up with PWM disabled, and the first setPosition() silently re-enables
+        // it (LynxServoController auto-enables on every pulse-width write), so
+        // commanding a position at init energizes the servo the instant you
+        // press INIT — before anyone can check the linkage. If DEFAULT_POSITION
+        // is past the hood's mechanical stop, it then sits there at full torque
+        // for however long you spend on the INIT screen, which is exactly how a
+        // servo cooks itself. Leaving it limp means you can back-drive the hood
+        // by hand to see where it is. Hood.periodic() takes it from PLAY.
     }
 
     public void initStopper(HardwareMap hw){
