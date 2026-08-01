@@ -31,6 +31,8 @@ public class Constants {
 
         //stick input deadzone
         public static final double DEADZONE = 0.05;
+
+        public static final double INVERT_STRAFE = true;
     }
 
     public static final class Intake {
