@@ -37,6 +37,15 @@ public class Limelight implements Subsystem {
     private final List<Integer> visibleTagIds = new ArrayList<>();
     private final ElapsedTime sinceValidResult = new ElapsedTime();
 
+    // Fresh-frame tracking. The camera runs at Constants.Vision.FRAME_RATE_FPS
+    // while the control loop runs several times faster, so getLatestResult()
+    // usually hands back a frame we've already seen. The Control Hub stamps each
+    // result on arrival, so an unchanged stamp means "no new data" — which is
+    // what lets consumers avoid acting on the same measurement twice.
+    private long lastStampNanos = Long.MIN_VALUE;
+    private long frameId = 0;
+    private boolean newFrame = false;
+
     public Limelight(Hardware hardware) {
         limelight = hardware.limelight;
     }
@@ -97,6 +106,26 @@ public class Limelight implements Subsystem {
         return sinceValidResult.milliseconds();
     }
 
+    /**
+     * True when the most recent {@link #periodic()} ingested a camera frame we
+     * hadn't seen before. Gate anything that INTEGRATES a vision measurement on
+     * this — the control loop runs faster than the camera, so acting every loop
+     * applies the same measurement two or three times over.
+     *
+     * <p>Note this is about the frame being new, not about the frame being
+     * useful: a fresh frame that doesn't contain the goal tag still reports true
+     * here while {@link #hasTarget()} reports false. That combination is a
+     * genuine loss, and it's the signal callers want.
+     */
+    public boolean isNewFrame() {
+        return newFrame;
+    }
+
+    /** Increments once per distinct camera frame. For staleness comparisons. */
+    public long getFrameId() {
+        return frameId;
+    }
+
     @Override
     public void periodic() {
         LLResult result = limelight.getLatestResult();
@@ -106,6 +135,7 @@ public class Limelight implements Subsystem {
         // dropped) or an invalid/empty result, hasTarget stays false. The turret
         // then returns to neutral rather than chasing stale data.
         hasTarget = false;
+        newFrame = false;
         visibleTagIds.clear();
 
         if (result == null || !result.isValid()) {
@@ -118,6 +148,16 @@ public class Limelight implements Subsystem {
         }
 
         sinceValidResult.reset();
+
+        // Stamped by the Control Hub when the result arrived, so it changes only
+        // on a genuinely new frame. Deliberately BEFORE the tag search: a new
+        // frame that happens not to contain our tag is still new information.
+        long stamp = result.getControlHubTimeStampNanos();
+        if (stamp != lastStampNanos) {
+            lastStampNanos = stamp;
+            frameId++;
+            newFrame = true;
+        }
 
         // Pick out OUR goal tag specifically. result.getTx() would give whatever
         // tag the Limelight considers primary, which may be the wrong goal or an

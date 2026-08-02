@@ -83,9 +83,14 @@ public class TurretAimTest extends OpMode {
                 : limelight.hasTarget() ? "aiming..."
                 : "NO TARGET — RETURNING NEUTRAL");
         telemetry.addData(">> tx", limelight.hasTarget()
-                ? String.format("%+.2f deg  (band +/-%.1f)", limelight.getTx(),
-                        TurretTuning.AIM_TOLERANCE_DEG)
-                : "--");
+                ? String.format("%+.2f deg raw / %+.2f filtered  (band +/-%.1f, break %.1f)",
+                        limelight.getTx(), turret.getFilteredTx(),
+                        TurretTuning.AIM_TOLERANCE_DEG, TurretTuning.KEEP_AIM_TOLERANCE_DEG)
+                : turret.hasUsableAim() ? "-- dropped frame, holding" : "--");
+        // Fresh-frame rate should land near Vision.FRAME_RATE_FPS. Well under it
+        // means the feed is struggling; the aim only moves on these frames.
+        telemetry.addData("Vision frames", "%d   new this loop: %s",
+                limelight.getFrameId(), limelight.isNewFrame());
         telemetry.addData("Commanded input", "%.3f   neutral %.3f", turret.getCommandedPosition(),
                 TurretTuning.NEUTRAL_POSITION);
         telemetry.addData("Tag", "%d   (X blue / B red)", limelight.getTargetTagId());
@@ -97,7 +102,11 @@ public class TurretAimTest extends OpMode {
         telemetry.addLine("After a successful direction test, copy the final inversion into Constants.");
 
         panels.addData("tx", limelight.hasTarget() ? limelight.getTx() : 0.0);
+        // Graph these two together: raw should be visibly noisier than filtered.
+        // If filtered is still jumpy, lower TX_FILTER_ALPHA.
+        panels.addData("txFiltered", turret.getFilteredTx());
         panels.addData("hasTarget", limelight.hasTarget());
+        panels.addData("usableAim", turret.hasUsableAim());
         panels.addData("onTarget", turret.isOnTarget());
         panels.addData("aimingEnabled", aimingEnabled);
         panels.addData("commandedPosition", turret.getCommandedPosition());

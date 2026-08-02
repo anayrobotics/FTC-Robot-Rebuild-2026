@@ -153,6 +153,29 @@ public class Constants {
 
         // Rate used for a manual dpad nudge, in input-position units per second.
         public static final double MANUAL_NUDGE_RATE = 0.15;
+
+        // Low-pass coefficient applied to tx before it's used for aiming, in
+        // [0, 1]: 1.0 is no filtering, smaller is smoother and laggier. The
+        // AprilTag corner solve jitters by a few tenths of a degree even with
+        // the robot and the tag both dead still, and that jitter is what makes a
+        // stationary turret twitch.
+        //
+        // Settling time is roughly one camera frame divided by this, so at
+        // Vision.FRAME_RATE_FPS and 0.4 the aim lags real motion by ~60 ms.
+        // Raise it if tracking a moving target feels sluggish; lower it if a
+        // parked turret still hunts.
+        public static final double TX_FILTER_ALPHA = 0.4;
+
+        // How many camera frames the goal tag may be missing before we give up
+        // and return to neutral. One dropped frame — a bit of motion blur, a
+        // glare, a bad exposure — used to snap the turret to neutral and then
+        // straight back to the lock the next frame, which is a big, ugly jump
+        // for something that was never actually lost. Inside this window the
+        // turret just freezes instead.
+        //
+        // Keep it small. This is "ride out a hiccup", not "coast blind" — the
+        // turret is holding a position based on data it can no longer confirm.
+        public static final double TARGET_GRACE_FRAMES = 3.0;
     }
 
     public static final class Hood {
@@ -260,6 +283,13 @@ public class Constants {
 
         // Index of the AprilTag pipeline configured in the Limelight web UI.
         public static final int PIPELINE = 0;
+
+        // Frame rate the Limelight pipeline actually runs at. This is SLOWER
+        // than the OpMode control loop, which is the whole reason Turret gates
+        // its aim update on a fresh frame: integrate the same tx three times
+        // because the loop ran three times, and the turret overshoots by 3x.
+        // Also used to turn Turret.TARGET_GRACE_FRAMES into a duration.
+        public static final double FRAME_RATE_FPS = 40.0;
 
         // DECODE (2025-2026) AprilTags, all in the 36h11 family.
         //   20 = BLUE goal          (aim target when on blue alliance)

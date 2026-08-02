@@ -56,7 +56,7 @@ public class PreloadAuto extends OpMode {
     // target, no localizer, just power for a time. Negative axial is backwards;
     // flip the sign here if your robot needs to go the other way.
     private static final double DRIVE_POWER = 0.4;
-    private static final double DRIVE_TIME_S = 0.6;
+    private static final double DRIVE_TIME_S = 1.5;
 
     // How long to run the indexer once the burst starts. Sized to empty the
     // preloads, not to shoot for a fixed count — there's no ball sensor.
