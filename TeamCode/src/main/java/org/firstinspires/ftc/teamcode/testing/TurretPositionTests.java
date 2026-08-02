@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode.testing;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.hardware.PwmControl;
 
 import org.firstinspires.ftc.teamcode.Constants;
 import org.firstinspires.ftc.teamcode.hardware.Hardware;
@@ -34,6 +35,7 @@ abstract class TurretPositionTest extends OpMode {
     public void loop() {
         commandPosition();
         telemetry.addData(">> Command", "%s  (input %.2f)", positionName(), position());
+        addPwmTelemetry();
         telemetry.addData("Neutral input", "%.2f", Constants.Turret.NEUTRAL_POSITION);
         telemetry.addLine("STOP returns to neutral.");
         telemetry.update();
@@ -47,6 +49,25 @@ abstract class TurretPositionTest extends OpMode {
 
     private void commandPosition() {
         hardware.turret.setPosition(position());
+    }
+
+    /**
+     * Confirms the PWM range the Control Hub reports after Hardware.initTurret()
+     * has configured it. This is a readback of the Hub configuration, not an
+     * estimate of the servo's physical position.
+     */
+    private void addPwmTelemetry() {
+        if (!(hardware.turret instanceof PwmControl)) {
+            telemetry.addLine("!! Servo port does not expose PWM-range readback");
+            return;
+        }
+
+        PwmControl.PwmRange range = ((PwmControl) hardware.turret).getPwmRange();
+        double commandedPulseUs = range.usPulseLower
+                + position() * (range.usPulseUpper - range.usPulseLower);
+        telemetry.addData("Hub PWM", "%.0f..%.0f us, frame %.1f ms",
+                range.usPulseLower, range.usPulseUpper, range.usFrame / 1000.0);
+        telemetry.addData("Commanded pulse", "%.0f us", commandedPulseUs);
     }
 }
 
