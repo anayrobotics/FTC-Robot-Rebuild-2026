@@ -58,17 +58,13 @@ import org.firstinspires.ftc.teamcode.tuning.TurretTuning;
  *       hand while held; it resumes hunting the goal on release.</li>
  *   <li><b>Dpad down</b> — park the turret back at its origin (straight ahead)
  *       and hold it there, off the goal. Press again, or nudge it with dpad
- *       left/right, to resume tracking. Use it before an endgame climb or to
- *       unwind the turret; you can't shoot while parked.</li>
+ *       left/right, to resume tracking. Use it before an endgame climb; you
+ *       can't shoot while parked.</li>
  * </ul>
  *
- * <p>Because the turret tracks continuously rather than only while a button is
- * held, it would otherwise chase the goal round in circles as you drive. It is
- * held to one turn of travel in software and unwraps itself at the limit (see
- * {@link Turret}) — but that protection is built entirely on the servo's
- * feedback wire. If that wire is disconnected the travel never appears to
- * change, the limit never trips, and nothing stops the turret twisting its own
- * loom off. Test 4a in "Robot Test" checks it; run that before trusting this.
+ * <p>The turret is an Axon positional servo in Servo Mode. Its programmer-
+ * configured left/right limits protect the cable range; when the tag disappears
+ * outside that limited swing, {@link Turret} returns the servo to neutral.
  */
 public abstract class MecanumTeleOp extends OpMode {
     // Trigger past this counts as "held".
@@ -160,8 +156,7 @@ public abstract class MecanumTeleOp extends OpMode {
             turretParked = false;
             turret.setState(Turret.State.MANUAL);
             turret.setManualPower(gamepad1.dpad_left
-                    ? -Constants.Turret.MANUAL_NUDGE_POWER
-                    : Constants.Turret.MANUAL_NUDGE_POWER);
+                    ? -1.0 : 1.0);
         } else if (turretParked) {
             turret.setState(Turret.State.RETURN_TO_ORIGIN);
         } else {
@@ -201,15 +196,14 @@ public abstract class MecanumTeleOp extends OpMode {
         // asking the strict one twice is what makes a shooter feel broken.
         //
         // READY is deliberately tight: a 75 RPM window and a 1 degree lock. But
-        // a ball through the wheel costs a couple of hundred RPM, and the turret
-        // cuts its own servo the moment it's inside the lock band so the flag
-        // flickers anyway. Re-check READY every loop and the gate slams shut
+        // a ball through the wheel costs a couple of hundred RPM. Re-check READY
+        // every loop and the gate slams shut
         // between every single shot, each time restarting its travel timer — so
         // the driver holds the trigger and watches balls trickle out.
         //
         // So: READY arms the burst, and much wider bands sustain it. The shot
         // still stops the instant the aim genuinely goes (target lost, turret
-        // parked or unwrapping, wheel really bogged down).
+        // parked, or wheel really bogged down).
         if (!fire) {
             firing = false;
         } else if (ready) {
@@ -285,15 +279,8 @@ public abstract class MecanumTeleOp extends OpMode {
         }
         telemetry.addData("Turret", "%s%s", turret.getState(),
                 turret.isOnTarget() ? " — LOCKED" : "");
-        if (turret.isStalled()) {
-            telemetry.addLine("!! TURRET BLOCKED — it gave up moving. Check for a snag.");
-        }
-        // Read the limit from TurretTuning, not Constants: the turret enforces
-        // the live value, and telemetry that quotes a different number than the
-        // code obeys is worse than no telemetry.
-        telemetry.addData("Turret wind", "%+.0f deg of %.0f%s",
-                turret.getTravelDeg(), TurretTuning.MAX_TRAVEL_DEG,
-                turret.isUnwinding() ? " — UNWRAPPING" : "");
+        telemetry.addData("Turret command", "%.3f   neutral %.3f",
+                turret.getCommandedPosition(), TurretTuning.NEUTRAL_POSITION);
         telemetry.addData("Flywheel", "%.0f / %.0f rpm%s",
                 flywheel.getCurrentRpm(), flywheel.getTargetRpm(),
                 flywheel.atTargetRpm() ? " — at speed" : "");
@@ -320,16 +307,6 @@ public abstract class MecanumTeleOp extends OpMode {
         }
         if (ready) {
             return fire ? ">> FIRING" : ">> READY TO SHOOT — hold LT to fire";
-        }
-        if (turret.isStalled()) {
-            // The turret tried to move and couldn't, and has cut power rather
-            // than grinding. Nothing the driver presses fixes that.
-            return ">> REVVING — TURRET BLOCKED, something is snagging it";
-        }
-        if (turret.isUnwinding()) {
-            // A full-turn swing off the goal and back. Say so, or it reads as
-            // the turret having lost the plot mid-match.
-            return ">> REVVING — turret unwrapping its wires, hold on";
         }
         if (turretParked) {
             // Parked can't shoot: isOnTarget() is false outside AUTO_AIM. Say so

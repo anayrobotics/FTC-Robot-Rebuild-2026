@@ -8,7 +8,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
  *
  * <p>The tests are ordered the way you should actually run them: nothing later
  * in the list can be trusted until everything before it passes. Auto-aim needs a
- * working turret, which needs a working encoder; a shot that misses is a hood
+ * working turret with verified programmer limits; a shot that misses is a hood
  * problem, a flywheel problem, a distance-estimate problem, or an aim problem,
  * and the only cheap way to tell them apart is to have already proved three of
  * the four. Work top to bottom. See {@code doc/TEST_DAY.md} for what each test
@@ -46,7 +46,10 @@ public class RobotTest extends SelectableOpMode {
             });
 
             s.folder("4 - Turret", f -> {
-                f.add("4a Encoder + Manual + Park (no camera)", TurretManualTest::new);
+                f.add("4a Command Neutral (no camera)", TurretNeutralTest::new);
+                f.add("4b Command Max Left (no camera)", TurretMaxLeftTest::new);
+                f.add("4c Command Max Right (no camera)", TurretMaxRightTest::new);
+                f.add("4d Positional Manual (no camera)", TurretManualTest::new);
             });
 
             s.folder("5 - Vision + Auto-Aim", f -> {
