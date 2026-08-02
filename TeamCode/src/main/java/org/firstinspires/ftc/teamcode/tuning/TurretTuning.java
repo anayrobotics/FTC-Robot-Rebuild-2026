@@ -22,7 +22,7 @@ public class TurretTuning {
     public static double AIM_TOLERANCE_DEG = Constants.Turret.AIM_TOLERANCE_DEG;
 
     /** Flip only if the turret moves away from the tag in the image. */
-    public static boolean INVERT_OUTPUT = Constants.Turret.INVERT_OUTPUT;
+    public static boolean INVERT_OUTPUT = true;
 
     /** Position units per second for a full dpad manual command. */
     public static double MANUAL_NUDGE_RATE = Constants.Turret.MANUAL_NUDGE_RATE;
