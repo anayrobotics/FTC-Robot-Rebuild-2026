@@ -131,8 +131,8 @@ public class Constants {
         // Aim is a position-rate loop: tx (degrees) times kP produces servo
         // input-position units per second, then periodic() integrates it. Tune
         // kP first; this is deliberately independent of loop rate.
-        public static final double kP = 0.020;
-        public static final double MAX_AIM_RATE = 0.30;
+        public static final double kP = 0.2; //0.020
+        public static final double MAX_AIM_RATE = 0.7;
 
         // If the turret drives AWAY from the target (runs to a hard stop or
         // oscillates and grows), flip this. The correct sign depends on which
