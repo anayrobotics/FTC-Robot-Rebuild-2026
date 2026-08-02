@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.teamcode.Constants;
 import org.firstinspires.ftc.teamcode.commands.CommandScheduler;
 import org.firstinspires.ftc.teamcode.commands.SetIndexerStateCommand;
+import org.firstinspires.ftc.teamcode.commands.SetIntakeStateCommand;
 import org.firstinspires.ftc.teamcode.hardware.Hardware;
 import org.firstinspires.ftc.teamcode.subsystems.Drivebase;
 import org.firstinspires.ftc.teamcode.subsystems.Flywheel;
@@ -97,6 +98,7 @@ public class PreloadAuto extends OpMode {
     // Last state actually commanded, so we don't re-schedule the same command
     // fifty times a second.
     private Indexer.State lastIndexerState = Indexer.State.IDLE;
+    private Intake.State lastIntakeState = Intake.State.IDLE;
 
     @Override
     public void init() {
@@ -163,6 +165,9 @@ public class PreloadAuto extends OpMode {
                 : Constants.Flywheel.SHOOT_RPM;
 
         Indexer.State wantIndexer = Indexer.State.IDLE;
+        // Runs through BACK_UP and SHOOT so it's already stacking balls into the
+        // indexer by the time the burst starts, same as holding RB in TeleOp.
+        Intake.State wantIntake = phase == Phase.DONE ? Intake.State.IDLE : Intake.State.INTAKING;
 
         switch (phase) {
             case BACK_UP:
@@ -221,6 +226,10 @@ public class PreloadAuto extends OpMode {
             scheduler.schedule(new SetIndexerStateCommand(indexer, wantIndexer));
             lastIndexerState = wantIndexer;
         }
+        if (wantIntake != lastIntakeState) {
+            scheduler.schedule(new SetIntakeStateCommand(intake, wantIntake));
+            lastIntakeState = wantIntake;
+        }
 
         scheduler.run();
 
@@ -243,6 +252,7 @@ public class PreloadAuto extends OpMode {
                 flywheel.atTargetRpm() ? " — at speed" : "");
         telemetry.addData("Indexer", "%s%s", indexer.getState(),
                 feeding ? String.format("   feeding %.2f s", feedTimer.seconds()) : "");
+        telemetry.addData("Intake", "%s", intake.getState());
         telemetry.update();
     }
 
