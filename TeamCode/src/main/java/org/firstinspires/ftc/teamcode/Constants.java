@@ -277,13 +277,35 @@ public class Constants {
         // (or flip it live from the OpMode).
         public static final int DEFAULT_TARGET_TAG = RED_GOAL_TAG;
 
-        // Camera geometry for estimating distance from the target's vertical
-        // angle (ty). Measure these on the real robot/field, in meters/degrees.
-        //   CAMERA_HEIGHT_M     : lens height above the floor
-        //   GOAL_TAG_HEIGHT_M   : height of the goal AprilTag's center
-        //   CAMERA_MOUNT_ANGLE  : upward tilt of the camera from horizontal
+        // Camera geometry behind the distance estimate:
+        //
+        //   distance = (GOAL_TAG_HEIGHT_M - CAMERA_HEIGHT_M) / tan(CAMERA_MOUNT_ANGLE_DEG + ty)
+        //
+        // Both heights are measured from the FIELD TILE SURFACE, not the floor
+        // under the tiles. The distance that comes out is the HORIZONTAL run
+        // along the floor, NOT the diagonal line of sight — check it with the
+        // tape held flat on the tiles, or it reads long and you end up
+        // "correcting" a mount angle that was never wrong.
+
+        // Lens height above the tiles, to the CENTER OF THE LENS — not the top
+        // of the case, not the bracket. Measure this on the robot.
         public static final double CAMERA_HEIGHT_M = 0.30;
-        public static final double GOAL_TAG_HEIGHT_M = 0.95;
+
+        // Height of the goal AprilTag's CENTER above the tiles. 29.5 in is the
+        // official DECODE spec: the FTC Field Coordinate System doc places the
+        // center of the red goal tag (24) at (-58.3727, 55.6425, 29.5) inches,
+        // and the blue goal (20) mirrors it. 29.5 * 0.0254 = 0.7493 m.
+        //
+        // This is a pure scale factor on every distance the robot reports, so
+        // getting it wrong makes every ranged shot miss by the same ratio —
+        // which looks exactly like a badly tuned shooting table and will send
+        // you tuning the wrong thing. Measure your own goal if you practice
+        // against a home-built replica; those rarely match spec.
+        public static final double GOAL_TAG_HEIGHT_M = 0.749;
+
+        // Upward tilt of the camera's optical axis from HORIZONTAL (0 = dead
+        // level). Don't chase this with a protractor — park at a tape-measured
+        // distance and let VisionTest (test 5a) solve it, then press A to apply.
         public static final double CAMERA_MOUNT_ANGLE_DEG = 20.0;
     }
 
