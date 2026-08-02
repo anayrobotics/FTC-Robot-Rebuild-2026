@@ -109,6 +109,10 @@ public class AutoAimTeleOp extends OpMode {
     // field only so telemetry can show table and trim as separate numbers.
     private double tableRpm = 0;
 
+    // How many times dpad up has been pressed this match. Diagnostics for the
+    // field-heading reset — see the HEADING block in telemetry.
+    private int headingResets = 0;
+
     // Last state actually commanded, so we don't re-schedule the same command
     // fifty times a second.
     private Intake.State lastIntakeState = Intake.State.IDLE;
@@ -179,6 +183,9 @@ public class AutoAimTeleOp extends OpMode {
         // --- Driving ---
         if (gamepad1.dpadUpWasPressed()) {
             drivebase.resetHeading();
+            // Counted purely so telemetry can prove the button fired. If this
+            // never increments, the reset isn't broken — it's never running.
+            headingResets++;
         }
         drivebase.driveWithGamepad(gamepad1, true);
 
@@ -344,7 +351,24 @@ public class AutoAimTeleOp extends OpMode {
         // HOOD: un-comment.
         // telemetry.addData("Hood position", "%.2f", hood.getCommandedPosition());
         telemetry.addLine();
+        // --- HEADING diagnostics: why doesn't dpad up change field-forward? ---
+        // These three numbers can't all be right at once, so whichever one is
+        // stuck names the bug. Spin the robot by hand and watch:
+        //   raw frozen              -> the navX isn't being read (wrong device in
+        //                              the config, or firstAngle isn't yaw for
+        //                              this mounting). Zeroing a constant does
+        //                              nothing, which is exactly the symptom.
+        //   raw moves, offset stuck -> dpad up isn't reaching resetYaw(); check
+        //                              that "resets" below counts your presses.
+        //   both move, drive doesn't-> the drive is reading a different object
+        //                              than the one being zeroed.
+        // "heading" is what driveFieldCentric() actually rotates by; it should
+        // read ~0 right after a reset and swing +CCW as you turn the robot left.
+        double rawYaw = Math.toDegrees(hardware.navxImu.getRawYawRad());
+        double yawOffset = Math.toDegrees(hardware.navxImu.getYawOffsetRad());
         telemetry.addData("Heading (deg)", "%.1f", Math.toDegrees(drivebase.getHeading()));
+        telemetry.addData("  navX raw", "%.1f deg", rawYaw);
+        telemetry.addData("  zero offset", "%.1f deg   (resets: %d)", yawOffset, headingResets);
         telemetry.addData("Intake", "%s   (RB = hold to intake)", intake.getState());
         telemetry.addData("Indexer", "%s   (A = hold to feed)", indexer.getState());
         telemetry.addLine("Hood + stopper are OUT of this OpMode.");

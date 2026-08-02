@@ -74,6 +74,26 @@ public class NavXIMU implements CustomIMU {
     public void setHeading(double headingRad) {
         yawOffsetRad = readRawYawRad() - headingRad;
     }
+    /**
+     * The sensor's own yaw, with no zeroing applied. Diagnostics only — the
+     * drive wants {@link #getHeading()}. If this doesn't move as you spin the
+     * robot, the problem is the sensor or the axis decomposition below, not the
+     * zeroing.
+     */
+    public double getRawYawRad() {
+        return readRawYawRad();
+    }
+
+    /**
+     * The zeroing offset {@link #resetYaw()} last stored. Diagnostics only. Raw
+     * minus this (normalized) is exactly what {@link #getHeading()} returns, so
+     * if raw moves and this tracks it but the drive doesn't change, the drive
+     * isn't reading this object.
+     */
+    public double getYawOffsetRad() {
+        return yawOffsetRad;
+    }
+
     private double readRawYawRad() {
         // firstAngle of an INTRINSIC ZYX decomposition is yaw (rotation about Z).
         Orientation o = gyro.getAngularOrientation(
