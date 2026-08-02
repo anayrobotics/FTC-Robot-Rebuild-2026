@@ -21,6 +21,7 @@ abstract class TurretPositionTest extends OpMode {
     public void init() {
         hardware.initTurret(hardwareMap);
         telemetry.addData("Turret position test", positionName());
+        addPwmTelemetry();
         telemetry.addLine("No movement during INIT. START commands the position.");
         telemetry.addLine("Keep a hand on STOP and watch the wiring.");
         telemetry.update();
