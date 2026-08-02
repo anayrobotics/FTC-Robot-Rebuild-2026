@@ -126,7 +126,8 @@ public class Hardware {
             throw new IllegalStateException("Turret servo port does not support configurable PWM range");
         }
         ((PwmControl) turret).setPwmRange(new PwmControl.PwmRange(
-                Constants.Turret.MIN_PULSE_US, Constants.Turret.MAX_PULSE_US));
+                Constants.Turret.MIN_PULSE_US, Constants.Turret.MAX_PULSE_US,
+                Constants.Turret.PWM_FRAME_US));
         // Do not command a position during INIT. The first active loop either
         // begins vision tracking or explicitly returns the turret to neutral.
     }
