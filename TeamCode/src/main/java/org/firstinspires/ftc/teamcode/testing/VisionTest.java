@@ -136,10 +136,10 @@ public class VisionTest extends OpMode {
             VisionTuning.CAMERA_HEIGHT_M -= 0.01;
         }
         if (gamepad1.dpadRightWasPressed()) {
-            tapeM += 0.05;
+            tapeM += 0.01;
         }
         if (gamepad1.dpadLeftWasPressed()) {
-            tapeM = Math.max(0, tapeM - 0.05);
+            tapeM = Math.max(0, tapeM - 0.01);
         }
 
         limelight.periodic();

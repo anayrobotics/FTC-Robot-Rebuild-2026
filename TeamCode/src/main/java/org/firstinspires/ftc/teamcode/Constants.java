@@ -36,7 +36,7 @@ public class Constants {
     public static final class Intake {
         public static final String MOTOR = "intake";
         public static final DcMotor.Direction DIRECTION = DcMotor.Direction.FORWARD;
-        public static final double SPEED = 1.0;
+        public static final double SPEED = 0.8;
     }
 
     public static final class Indexer {
@@ -95,7 +95,7 @@ public class Constants {
         // measure real distances and log the RPM that scores, then edit these.
         // Must be the same length, and distances must be strictly increasing.
         public static final double[] RANGE_DISTANCES_M = {1.0, 2.0, 3.0, 4.0};
-        public static final double[] RANGE_RPMS        = {2600, 3100, 3600, 4200};
+        public static final double[] RANGE_RPMS        = {2800, 3350, 3900, 4525};
     }
 
     public static final class Turret {
@@ -131,8 +131,8 @@ public class Constants {
         // Aim is a position-rate loop: tx (degrees) times kP produces servo
         // input-position units per second, then periodic() integrates it. Tune
         // kP first; this is deliberately independent of loop rate.
-        public static final double kP = 0.2; //0.020
-        public static final double MAX_AIM_RATE = 0.7;
+        public static final double kP = 0.8; //0.020
+        public static final double MAX_AIM_RATE = 0.2;
 
         // If the turret drives AWAY from the target (runs to a hard stop or
         // oscillates and grows), flip this. The correct sign depends on which
@@ -141,7 +141,7 @@ public class Constants {
 
         // Inside this many degrees we consider ourselves aimed and hold the last
         // commanded position rather than hunting around the image center.
-        public static final double AIM_TOLERANCE_DEG = 1.0;
+        public static final double AIM_TOLERANCE_DEG = 2.50;
 
         // The band that KEEPS a burst feeding once it has started, the same idea
         // as Flywheel.RPM_KEEP_TOLERANCE. Because the turret cuts its servo the
@@ -289,7 +289,7 @@ public class Constants {
 
         // Lens height above the tiles, to the CENTER OF THE LENS — not the top
         // of the case, not the bracket. Measure this on the robot.
-        public static final double CAMERA_HEIGHT_M = 0.30;
+        public static final double CAMERA_HEIGHT_M = 0.315;
 
         // Height of the goal AprilTag's CENTER above the tiles. 29.5 in is the
         // official DECODE spec: the FTC Field Coordinate System doc places the
@@ -306,7 +306,7 @@ public class Constants {
         // Upward tilt of the camera's optical axis from HORIZONTAL (0 = dead
         // level). Don't chase this with a protractor — park at a tape-measured
         // distance and let VisionTest (test 5a) solve it, then press A to apply.
-        public static final double CAMERA_MOUNT_ANGLE_DEG = 20.0;
+        public static final double CAMERA_MOUNT_ANGLE_DEG = 24.06;
     }
 
     public static final class Imu {
