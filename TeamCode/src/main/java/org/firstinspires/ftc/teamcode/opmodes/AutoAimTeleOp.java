@@ -47,24 +47,28 @@ import org.firstinspires.ftc.teamcode.tuning.TurretTuning;
  * telemetry. Unlike {@link BlueTeleOp}/{@link RedTeleOp} this is one selectable
  * OpMode, because it's a practice config and re-picking beats stopping.
  *
- * <h2>Controls — gamepad1 only, same as the match TeleOp</h2>
+ * <h2>Controls — gamepad1 only</h2>
+ * Unlike the match TeleOp, <b>nothing here latches</b>. Every actuator runs only
+ * while its button is down and stops the moment you let go, so letting go of the
+ * gamepad puts the whole robot at rest. That's deliberate for a practice config
+ * with no stopper fitted: a latch that survives your thumb coming off the button
+ * is a ball going into a wheel you didn't ask to feed.
  * <ul>
  *   <li><b>Left stick</b> — translate, field-relative. <b>Right stick X</b> — turn.</li>
  *   <li><b>Dpad up</b> — re-zero field-forward.</li>
- *   <li><b>Left bumper</b> — toggle the flywheel rev.</li>
- *   <li><b>Left trigger</b> — hold to FIRE (gated on READY).</li>
- *   <li><b>Right bumper</b> — toggle the intake. <b>Right trigger</b> — spit, while held.</li>
+ *   <li><b>Left bumper</b> — hold to rev the flywheel.</li>
+ *   <li><b>Left trigger</b> — hold to FIRE (gated on READY). Held on top of LB.</li>
+ *   <li><b>Right bumper</b> — hold to intake. <b>Right trigger</b> — spit, while
+ *       held; outranks the bumper.</li>
  *   <li><b>A</b> — run the indexer while held. <b>B</b> — reverse it while held,
- *       to back a jam out. Unlike the match TeleOp this does NOT latch: with no
- *       stopper fitted the indexer feeds straight into the flywheel, so it only
- *       runs while your thumb is down.</li>
+ *       to back a jam out.</li>
  *   <li><b>Y / X</b> — trim the auto-ranged RPM by +/-50, for conditions the
  *       table doesn't cover. Not saved; see {@code RangeTuningTest} (test 6d)
  *       to change the table itself.</li>
  *   <li><b>Dpad left / right</b> — nudge the turret by hand while held; resumes
  *       hunting the goal on release.</li>
- *   <li><b>Dpad down</b> — park the turret at its origin and hold it there. You
- *       can't shoot while parked. Press again to resume tracking.</li>
+ *   <li><b>Dpad down</b> — hold to park the turret at its origin. You can't shoot
+ *       while parked; release to resume tracking.</li>
  * </ul>
  */
 @TeleOp(name = "TeleOp — Auto-Aim (no hood/stopper)", group = "Drive")
@@ -87,14 +91,13 @@ public class AutoAimTeleOp extends OpMode {
     // Chosen on the INIT screen with X / B.
     private int goalTagId = Constants.Vision.DEFAULT_TARGET_TAG;
 
-    // Latched by the left bumper: is the shooter spun up and tracking range?
+    // Left bumper held: is the shooter spun up and tracking range? Nothing in
+    // this OpMode latches — every button runs only while it is down.
     private boolean revving = false;
-    // Latched by dpad down: hold the turret at its origin instead of tracking.
+    // Dpad down held: hold the turret at its origin instead of tracking.
     private boolean turretParked = false;
-    // Latched by the right bumper. The spit-out trigger outranks it while held
-    // without clearing it, so releasing the trigger resumes intaking.
-    private boolean intakeLatched = false;
-    // No indexer latch here: A is hold-to-feed. See the indexer block in loop().
+    // No indexer latch here either: A is hold-to-feed. See the indexer block in
+    // loop().
     // A burst in progress. Armed by READY, sustained on wider bands, dropped
     // when the trigger is released. See the loop for why the two differ.
     private boolean firing = false;
@@ -157,7 +160,8 @@ public class AutoAimTeleOp extends OpMode {
         telemetry.addLine("No hood, no stopper — nothing holds a ball off the wheel,");
         telemetry.addLine("so the indexer only feeds once the shot reads READY.");
         telemetry.addLine();
-        telemetry.addLine("LB revs, LT fires  |  RB intake / RT spit  |  A indexer (HOLD) / B reverse");
+        telemetry.addLine("Everything is HOLD-to-run — no toggles in this OpMode.");
+        telemetry.addLine("LB revs, LT fires  |  RB intake / RT spit  |  A indexer / B reverse");
         telemetry.addLine("Dpad up re-zeroes heading  |  dpad L-R nudges turret  |  dpad down parks");
         telemetry.update();
     }
@@ -179,13 +183,10 @@ public class AutoAimTeleOp extends OpMode {
         drivebase.driveWithGamepad(gamepad1, true);
 
         // --- Turret: always hunting the goal ---
-        // Parking has to LATCH rather than run while held: auto-aim is the
-        // default every loop, so a momentary park would be dragged straight back
-        // to the goal the loop after you let go. Dpad down again — or any manual
-        // nudge — releases it back to tracking.
-        if (gamepad1.dpadDownWasPressed()) {
-            turretParked = !turretParked;
-        }
+        // Park is hold-to-park like everything else here: let go of dpad down and
+        // auto-aim, which is the default every loop, drags the turret straight
+        // back to the goal. A manual nudge outranks it while held.
+        turretParked = gamepad1.dpad_down;
         if (gamepad1.dpad_left || gamepad1.dpad_right) {
             turretParked = false;
             turret.setState(Turret.State.MANUAL);
@@ -207,13 +208,12 @@ public class AutoAimTeleOp extends OpMode {
         //     hood.setForDistance(distance);
         // }
 
-        // --- Flywheel: left bumper arms it ---
+        // --- Flywheel: hold the left bumper to rev ---
         // While revving, the target RPM follows the measured distance every loop,
         // so walking toward or away from the goal re-ranges the shot by itself.
-        // No range read yet just means the preset.
-        if (gamepad1.leftBumperWasPressed()) {
-            revving = !revving;
-        }
+        // No range read yet just means the preset. Let go and the wheel coasts
+        // down, so LT is held on top of LB for a shot.
+        revving = gamepad1.left_bumper;
 
         // Y/X trim the auto-ranged RPM without touching the table. This is for
         // the case the table can't cover: a tired battery, a different ball, a
@@ -270,15 +270,14 @@ public class AutoAimTeleOp extends OpMode {
                 && turret.getAimErrorDeg() <= Constants.Turret.KEEP_AIM_TOLERANCE_DEG
                 && flywheel.atTargetRpm(Constants.Flywheel.RPM_KEEP_TOLERANCE);
 
-        // --- Intake: latching bumper, momentary spit ---
-        if (gamepad1.rightBumperWasPressed()) {
-            intakeLatched = !intakeLatched;
-        }
+        // --- Intake: hold the bumper to take in, hold the trigger to spit ---
+        // The spit-out trigger outranks the bumper while held, so holding both
+        // spits and releasing the trigger goes straight back to intaking.
         Intake.State wantIntake;
         if (gamepad1.right_trigger > TRIGGER_THRESHOLD) {
             wantIntake = Intake.State.OUTTAKING;
         } else {
-            wantIntake = intakeLatched ? Intake.State.INTAKING : Intake.State.IDLE;
+            wantIntake = gamepad1.right_bumper ? Intake.State.INTAKING : Intake.State.IDLE;
         }
         if (wantIntake != lastIntakeState) {
             scheduler.schedule(new SetIntakeStateCommand(intake, wantIntake));
@@ -287,7 +286,7 @@ public class AutoAimTeleOp extends OpMode {
 
         // --- Indexer ---
         // Three claims on one motor, highest priority first: the fire trigger,
-        // a held B to back a jam out, then the A toggle for loading up.
+        // a held B to back a jam out, then a held A for loading up.
         //
         // With the gate fitted this branch would open the stopper and wait out
         // its travel time before feeding. There is no gate, so a confirmed burst
@@ -346,7 +345,7 @@ public class AutoAimTeleOp extends OpMode {
         // telemetry.addData("Hood position", "%.2f", hood.getCommandedPosition());
         telemetry.addLine();
         telemetry.addData("Heading (deg)", "%.1f", Math.toDegrees(drivebase.getHeading()));
-        telemetry.addData("Intake", "%s%s", intake.getState(), intakeLatched ? " (latched)" : "");
+        telemetry.addData("Intake", "%s   (RB = hold to intake)", intake.getState());
         telemetry.addData("Indexer", "%s   (A = hold to feed)", indexer.getState());
         telemetry.addLine("Hood + stopper are OUT of this OpMode.");
         telemetry.update();
@@ -356,7 +355,7 @@ public class AutoAimTeleOp extends OpMode {
     // by what's blocking the shot, most fundamental first.
     private String shooterStatus(boolean ready, boolean fire, boolean keepFiring) {
         if (!revving) {
-            return ">> IDLE — press LB to rev up";
+            return ">> IDLE — hold LB to rev up";
         }
         // Check the burst first. Mid-burst the strict READY flag dips on every
         // ball, and falling through to "aiming..." while balls are visibly
@@ -370,7 +369,7 @@ public class AutoAimTeleOp extends OpMode {
         if (turretParked) {
             // Parked can't shoot: isOnTarget() is false outside AUTO_AIM. Say so
             // rather than leaving the driver waiting on a lock that isn't coming.
-            return ">> REVVING — turret PARKED, dpad down to resume aiming";
+            return ">> REVVING — turret PARKED, release dpad down to resume aiming";
         }
         if (!limelight.hasTarget()) {
             return ">> REVVING — no goal in view, drive until the tag shows";
