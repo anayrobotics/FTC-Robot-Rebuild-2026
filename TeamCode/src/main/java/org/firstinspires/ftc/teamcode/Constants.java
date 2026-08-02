@@ -95,7 +95,7 @@ public class Constants {
         // measure real distances and log the RPM that scores, then edit these.
         // Must be the same length, and distances must be strictly increasing.
         public static final double[] RANGE_DISTANCES_M = {1.0, 2.0, 3.0, 4.0};
-        public static final double[] RANGE_RPMS        = {2800, 3350, 3900, 4525};
+        public static final double[] RANGE_RPMS        = {2900, 3475, 3900, 4525};
     }
 
     public static final class Turret {

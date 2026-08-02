@@ -54,7 +54,10 @@ import org.firstinspires.ftc.teamcode.tuning.TurretTuning;
  *   <li><b>Left bumper</b> — toggle the flywheel rev.</li>
  *   <li><b>Left trigger</b> — hold to FIRE (gated on READY).</li>
  *   <li><b>Right bumper</b> — toggle the intake. <b>Right trigger</b> — spit, while held.</li>
- *   <li><b>A</b> — toggle the indexer. <b>B</b> — reverse it while held, to back a jam out.</li>
+ *   <li><b>A</b> — run the indexer while held. <b>B</b> — reverse it while held,
+ *       to back a jam out. Unlike the match TeleOp this does NOT latch: with no
+ *       stopper fitted the indexer feeds straight into the flywheel, so it only
+ *       runs while your thumb is down.</li>
  *   <li><b>Y / X</b> — trim the auto-ranged RPM by +/-50, for conditions the
  *       table doesn't cover. Not saved; see {@code RangeTuningTest} (test 6d)
  *       to change the table itself.</li>
@@ -91,8 +94,7 @@ public class AutoAimTeleOp extends OpMode {
     // Latched by the right bumper. The spit-out trigger outranks it while held
     // without clearing it, so releasing the trigger resumes intaking.
     private boolean intakeLatched = false;
-    // Latched by A, same idea — outranked by the fire trigger and by B.
-    private boolean indexerLatched = false;
+    // No indexer latch here: A is hold-to-feed. See the indexer block in loop().
     // A burst in progress. Armed by READY, sustained on wider bands, dropped
     // when the trigger is released. See the loop for why the two differ.
     private boolean firing = false;
@@ -155,7 +157,7 @@ public class AutoAimTeleOp extends OpMode {
         telemetry.addLine("No hood, no stopper — nothing holds a ball off the wheel,");
         telemetry.addLine("so the indexer only feeds once the shot reads READY.");
         telemetry.addLine();
-        telemetry.addLine("LB revs, LT fires  |  RB intake / RT spit  |  A indexer / B reverse");
+        telemetry.addLine("LB revs, LT fires  |  RB intake / RT spit  |  A indexer (HOLD) / B reverse");
         telemetry.addLine("Dpad up re-zeroes heading  |  dpad L-R nudges turret  |  dpad down parks");
         telemetry.update();
     }
@@ -290,9 +292,6 @@ public class AutoAimTeleOp extends OpMode {
         // With the gate fitted this branch would open the stopper and wait out
         // its travel time before feeding. There is no gate, so a confirmed burst
         // feeds immediately — one less thing between READY and a ball leaving.
-        if (gamepad1.aWasPressed()) {
-            indexerLatched = !indexerLatched;
-        }
         Indexer.State wantIndexer;
         if (keepFiring) {
             wantIndexer = Indexer.State.FEEDING;
@@ -303,7 +302,11 @@ public class AutoAimTeleOp extends OpMode {
         } else if (gamepad1.b) {
             wantIndexer = Indexer.State.REVERSING;
         } else {
-            wantIndexer = indexerLatched ? Indexer.State.FEEDING : Indexer.State.IDLE;
+            // Hold-to-feed, not a toggle. With no stopper on this robot the
+            // indexer feeds straight into the flywheel, so a latch that survives
+            // taking your thumb off the button is a ball going into a wheel you
+            // didn't ask to feed. Releasing A stops it, always.
+            wantIndexer = gamepad1.a ? Indexer.State.FEEDING : Indexer.State.IDLE;
         }
         if (wantIndexer != lastIndexerState) {
             scheduler.schedule(new SetIndexerStateCommand(indexer, wantIndexer));
@@ -344,7 +347,7 @@ public class AutoAimTeleOp extends OpMode {
         telemetry.addLine();
         telemetry.addData("Heading (deg)", "%.1f", Math.toDegrees(drivebase.getHeading()));
         telemetry.addData("Intake", "%s%s", intake.getState(), intakeLatched ? " (latched)" : "");
-        telemetry.addData("Indexer", "%s%s", indexer.getState(), indexerLatched ? " (latched)" : "");
+        telemetry.addData("Indexer", "%s   (A = hold to feed)", indexer.getState());
         telemetry.addLine("Hood + stopper are OUT of this OpMode.");
         telemetry.update();
     }
