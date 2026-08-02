@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.hardware.PwmControl;
 import com.qualcomm.robotcore.hardware.Servo;
 
 import com.qualcomm.hardware.kauailabs.NavxMicroNavigationSensor;
@@ -121,6 +122,11 @@ public class Hardware {
     public void initTurret(HardwareMap hw){
         turret = hw.get(Servo.class, Constants.Turret.SERVO);
         turret.setDirection(Constants.Turret.DIRECTION);
+        if (!(turret instanceof PwmControl)) {
+            throw new IllegalStateException("Turret servo port does not support configurable PWM range");
+        }
+        ((PwmControl) turret).setPwmRange(new PwmControl.PwmRange(
+                Constants.Turret.MIN_PULSE_US, Constants.Turret.MAX_PULSE_US));
         // Do not command a position during INIT. The first active loop either
         // begins vision tracking or explicitly returns the turret to neutral.
     }

@@ -106,6 +106,12 @@ public class Constants {
         public static final String SERVO = "turret";
         public static final Servo.Direction DIRECTION = Servo.Direction.FORWARD;
 
+        // Pulse-width range configured in the Axon Programmer. Hardware.initTurret()
+        // applies this to the FTC servo port, so 0.0, 0.5, and 1.0 send
+        // 500, 1500, and 2500 microseconds respectively.
+        public static final double MIN_PULSE_US = 500;
+        public static final double MAX_PULSE_US = 2500;
+
         // Standard FTC input position that produces the Axon's programmed
         // neutral. This is NOT the Axon Programmer's numeric "Servo Neutral"
         // setting; that setting changes how the servo interprets this PWM input.
