@@ -29,10 +29,12 @@ import org.firstinspires.ftc.teamcode.tuning.TurretTuning;
  *       here commands the stopper servo, so if one IS plugged in it just sits
  *       wherever it was left.</li>
  *   <li><b>Hood</b> — commented out, not deleted. Every line it needs is still
- *       here behind {@code //}, marked {@code HOOD:}; un-comment them all
- *       (there are five spots: the import, the field, init, the loop, stop) and
- *       you have hood auto-ranging back. The launch angle is whatever the
- *       hood is mechanically sitting at until then.</li>
+ *       here behind {@code //}. Search this file for {@code HOOD:} and act on
+ *       all eight markers — seven are un-comments, and the one on
+ *       {@code registerSubsystem} asks you to add {@code hood} to the list —
+ *       and you have hood auto-ranging back, verbatim from the match TeleOp.
+ *       Until then the launch angle is wherever the hood is mechanically
+ *       sitting, and nothing energizes that servo.</li>
  * </ul>
  *
  * <p>Because the hood and stopper are out, this uses the per-group
@@ -53,6 +55,9 @@ import org.firstinspires.ftc.teamcode.tuning.TurretTuning;
  *   <li><b>Left trigger</b> — hold to FIRE (gated on READY).</li>
  *   <li><b>Right bumper</b> — toggle the intake. <b>Right trigger</b> — spit, while held.</li>
  *   <li><b>A</b> — toggle the indexer. <b>B</b> — reverse it while held, to back a jam out.</li>
+ *   <li><b>Y / X</b> — trim the auto-ranged RPM by +/-50, for conditions the
+ *       table doesn't cover. Not saved; see {@code RangeTuningTest} (test 6d)
+ *       to change the table itself.</li>
  *   <li><b>Dpad left / right</b> — nudge the turret by hand while held; resumes
  *       hunting the goal on release.</li>
  *   <li><b>Dpad down</b> — park the turret at its origin and hold it there. You
@@ -91,6 +96,13 @@ public class AutoAimTeleOp extends OpMode {
     // A burst in progress. Armed by READY, sustained on wider bands, dropped
     // when the trigger is released. See the loop for why the two differ.
     private boolean firing = false;
+
+    // Driver offset on top of the auto-ranged RPM (Y/X). Deliberately NOT
+    // persisted anywhere — it's a per-session correction, not a tuning value.
+    private double rpmTrim = 0;
+    // What the distance table asked for this loop, before the trim. Kept as a
+    // field only so telemetry can show table and trim as separate numbers.
+    private double tableRpm = 0;
 
     // Last state actually commanded, so we don't re-schedule the same command
     // fifty times a second.
@@ -200,10 +212,30 @@ public class AutoAimTeleOp extends OpMode {
         if (gamepad1.leftBumperWasPressed()) {
             revving = !revving;
         }
+
+        // Y/X trim the auto-ranged RPM without touching the table. This is for
+        // the case the table can't cover: a tired battery, a different ball, a
+        // practice field whose goal sits a bit high. If you find yourself
+        // holding the same trim at every distance, that's the table being wrong
+        // rather than conditions — take the number into test 6d and re-record,
+        // because a trim is not saved and every driver has to rediscover it.
+        if (gamepad1.yWasPressed()) {
+            rpmTrim += 50;
+        }
+        if (gamepad1.xWasPressed()) {
+            rpmTrim -= 50;
+        }
+
+        // Split out from setTargetRpm so telemetry can show what the TABLE said
+        // separately from what the wheel was actually asked for.
+        tableRpm = distance > 0
+                ? Flywheel.rpmForDistance(distance)
+                : Constants.Flywheel.SHOOT_RPM;
         if (revving) {
-            flywheel.setTargetRpm(distance > 0
-                    ? Flywheel.rpmForDistance(distance)
-                    : Constants.Flywheel.SHOOT_RPM);
+            // Clamped at 0: a trim more negative than the table value would
+            // otherwise ask for a negative RPM, which reads as "stopped" and
+            // makes READY impossible with no hint as to why.
+            flywheel.setTargetRpm(Math.max(0, tableRpm + rpmTrim));
         } else {
             flywheel.stop();
         }
@@ -303,6 +335,10 @@ public class AutoAimTeleOp extends OpMode {
         telemetry.addData("Flywheel", "%.0f / %.0f rpm%s",
                 flywheel.getCurrentRpm(), flywheel.getTargetRpm(),
                 flywheel.atTargetRpm() ? " — at speed" : "");
+        telemetry.addData("  auto-ranged", shownDistance > 0
+                ? String.format("%.0f rpm from %.2f m", tableRpm, shownDistance)
+                : String.format("%.0f rpm — NO RANGE, using preset", tableRpm));
+        telemetry.addData("  trim", "%+.0f rpm   (Y/X +/-50)", rpmTrim);
         // HOOD: un-comment.
         // telemetry.addData("Hood position", "%.2f", hood.getCommandedPosition());
         telemetry.addLine();

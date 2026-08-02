@@ -62,6 +62,7 @@ public class RobotTest extends SelectableOpMode {
                 f.add("6b Drive To Pose", DriveToPoseTest::new);
                 f.add("6c Field Drive + Ball Path + Flywheel (no aim)",
                         DriveBallPathShooterTest::new);
+                f.add("6d Shooting Table (rpm vs tape distance)", RangeTuningTest::new);
             });
         });
     }
