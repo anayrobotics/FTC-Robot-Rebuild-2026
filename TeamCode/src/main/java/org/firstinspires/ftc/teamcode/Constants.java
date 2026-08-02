@@ -129,10 +129,23 @@ public class Constants {
         public static final double MAX_POSITION = 1.0;
 
         // Aim is a position-rate loop: tx (degrees) times kP produces servo
-        // input-position units per second, then periodic() integrates it. Tune
-        // kP first; this is deliberately independent of loop rate.
-        public static final double kP = 0.8; //0.020
-        public static final double MAX_AIM_RATE = 0.2;
+        // input-position units per second, then periodic() integrates it. This
+        // is deliberately independent of loop rate.
+        //
+        // Read the pair as "top speed" and "how early we start slowing down":
+        // kP saturates MAX_AIM_RATE at an error of MAX_AIM_RATE / kP degrees, so
+        // that quotient is the approach band. Outside it the turret slews flat
+        // out; inside it the rate tapers proportionally, so the turret
+        // decelerates into the lock instead of arriving at full speed.
+        //
+        // Tune MAX_AIM_RATE for acquisition speed, then pick kP to keep the
+        // approach band a few times AIM_TOLERANCE_DEG: 0.6 / 0.075 = 8 degrees.
+        // A big kP against a small MAX_AIM_RATE (the old 0.8 / 0.2, saturated
+        // past a quarter of a degree) is not a fast turret — it is bang-bang at
+        // whatever MAX_AIM_RATE allows, and raising only MAX_AIM_RATE from there
+        // buys speed by overshooting the lock band on every frame.
+        public static final double kP = 0.075; //0.8, 0.020
+        public static final double MAX_AIM_RATE = 0.6; //0.2
 
         // If the turret drives AWAY from the target (runs to a hard stop or
         // oscillates and grows), flip this. The correct sign depends on which
@@ -152,7 +165,9 @@ public class Constants {
         public static final double KEEP_AIM_TOLERANCE_DEG = 3.0;
 
         // Rate used for a manual dpad nudge, in input-position units per second.
-        public static final double MANUAL_NUDGE_RATE = 0.15;
+        // Kept below MAX_AIM_RATE so a manual sweep stays controllable by eye,
+        // but not so far below that crossing the travel by hand takes seconds.
+        public static final double MANUAL_NUDGE_RATE = 0.4; //0.15
 
         // Low-pass coefficient applied to tx before it's used for aiming, in
         // [0, 1]: 1.0 is no filtering, smaller is smoother and laggier. The
@@ -161,10 +176,10 @@ public class Constants {
         // stationary turret twitch.
         //
         // Settling time is roughly one camera frame divided by this, so at
-        // Vision.FRAME_RATE_FPS and 0.4 the aim lags real motion by ~60 ms.
-        // Raise it if tracking a moving target feels sluggish; lower it if a
-        // parked turret still hunts.
-        public static final double TX_FILTER_ALPHA = 0.4;
+        // Vision.FRAME_RATE_FPS and 0.6 the aim lags real motion by ~40 ms
+        // (0.4 cost ~60 ms). Raise it if tracking a moving target feels
+        // sluggish; lower it if a parked turret still hunts.
+        public static final double TX_FILTER_ALPHA = 0.6; //0.4
 
         // How many camera frames the goal tag may be missing before we give up
         // and return to neutral. One dropped frame — a bit of motion blur, a
